@@ -68,6 +68,10 @@ body {
 :root[data-theme="night"] body { background:
   radial-gradient(ellipse 90% 50% at 50% -10%, rgba(255, 214, 150, .08), transparent 60%), var(--desk); }
 
+/* Author `display` beats the UA sheet's [hidden]{display:none} — say it explicitly,
+   or #overlay/#whisper stay on screen (blurring the page and swallowing taps). */
+[hidden] { display: none !important; }
+
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 input, select, textarea { font: inherit; color: var(--ink); background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px dashed currentColor; outline-offset: 2px; }
