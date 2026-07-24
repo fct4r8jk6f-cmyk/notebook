@@ -45,7 +45,7 @@ assigns).
 ### Item model (`makeItem`)
 
 ```
-{ id, kind, text, ink, date, time, bucket, done, doneAt, carried, sample,
+{ id, kind, text, ink, date, time, bucket, done, doneAt, doneKey, carried, sample,
   source: {quote, at, via}, question: {q, options:[{label, act}]},
   bill, renewal, debt, goal }
 ```
@@ -56,6 +56,9 @@ assigns).
   them the moment the first real dump lands. Seeds must never survive real use.
 - `question` parks an item as a sticky asking the user something; answering it
   runs an `act` (see `answerQuestion` / `actLabel`).
+- `doneKey` is the **local** day something was ticked, and it's what the Done
+  page groups by. `doneAt` is an ISO instant — don't group by `doneAt.slice(0,10)`,
+  that's the UTC day and lands things under the wrong heading after teatime.
 
 ## The two brains
 
@@ -86,7 +89,14 @@ anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
 (not overwritten) on import. Keep all three of those properties.
 
 `askDesk(question)` is the ribbon/chat path — same API, feeds it
-`notebookDigest()` as context. Also key-gated.
+`notebookDigest()` as context. Key-gated for the *reply*, but it always runs
+`search()` locally, so it stays useful without a key.
+
+`search(q)` matches on **terms**, not the whole phrase, minus stopwords, with
+plurals folded to singular and a bonus when the full phrase lands intact. It
+was once `hay.includes(needle)` with the entire question as the needle — so
+"when's rent due?" only matched an item literally containing that sentence, and
+the keyless Desk answered "nothing in the book" to nearly everything.
 
 ## Bill rhythms
 
