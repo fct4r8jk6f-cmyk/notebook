@@ -192,6 +192,11 @@ completes.
 
 - Develop on the branch you were given; commit with a clear message; push with
   `git push -u origin <branch>`.
+- **Don't leave work sitting in a pull request.** When a change is finished and
+  verified, open the PR, merge it, then pull `main` and restart the branch from
+  it (`git fetch origin main && git checkout -B <branch> origin/main`). No need
+  to ask first — the owner wants it merged and pulled. Merging deploys, since
+  Pages builds off `main`.
 - Since there are no tests, verify by opening the file in a browser and
   exercising the path you changed — dump something, check the tab it lands in,
   toggle both themes.
