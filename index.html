@@ -91,7 +91,9 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 /* ---------------- chrome ---------------- */
 .chrome {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 16px 8px; position: sticky; top: 0; z-index: 20;
+  /* right padding clears the fixed .ribbon (26px wide, ~18px inset). Without it
+     the ribbon sits over the dump button at a higher z-index and eats its taps. */
+  padding: 12px 48px 8px 16px; position: sticky; top: 0; z-index: 20;
   background: linear-gradient(var(--desk) 75%, transparent);
 }
 .brand { font-family: var(--fig); font-weight: 600; font-size: 14px; letter-spacing: .02em; }
@@ -233,15 +235,17 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 .tray .row { border-bottom: none; }
 
 /* ---------------- week ---------------- */
-.weekscroll { overflow-x: auto; margin: 0 -6px; padding: 4px 6px 8px; }
-.week { display: grid; grid-template-columns: repeat(7, minmax(128px, 1fr)); gap: 9px; min-width: 940px; align-items: start; }
-.day { background: color-mix(in srgb, var(--paper-1) 55%, transparent); border-radius: 7px; padding: 7px 8px 26px; min-height: 150px; position: relative; }
+/* The week stacks. It used to be a 7-across grid with min-width:940px, but .app
+   caps at 760px — so the spread overflowed its column at every viewport size,
+   permanently hiding Sunday behind a scrollbar phones don't draw. */
+.weekscroll { padding: 4px 0 8px; }
+.week { display: grid; grid-template-columns: 1fr; gap: 7px; align-items: start; }
+.day { background: color-mix(in srgb, var(--paper-1) 55%, transparent); border-radius: 7px; padding: 7px 9px 8px; min-height: 0; position: relative; }
 .day.is-past { opacity: .62; }
-.day.is-today {
-  background: var(--paper-1); box-shadow: 0 8px 18px var(--shadow);
-  transform: translateY(-6px) rotate(-.3deg); z-index: 2;
-}
-.day.is-today::before { content: ''; position: absolute; top: -10px; right: 14px; width: 14px; height: 28px; background: var(--amber-soft); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%); box-shadow: 0 2px 4px var(--shadow); }
+.day.is-today { background: var(--paper-1); box-shadow: 0 8px 18px var(--shadow); z-index: 2; }
+/* an amber tick on the spine. (It hung above the card as a bookmark when the
+   days sat side by side; stacked, that landed on the day above and on the date.) */
+.day.is-today::before { content: ''; position: absolute; top: 9px; left: -2px; width: 4px; height: 24px; border-radius: 2px; background: var(--amber-soft); }
 .dayhead { display: flex; align-items: baseline; gap: 6px; border-bottom: 1.5px solid var(--line); padding-bottom: 4px; margin-bottom: 7px; }
 .dayname { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--pencil-l); }
 .is-today .dayname { color: var(--amber-firm); }
@@ -251,8 +255,10 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 .day .tick { width: 16px; height: 16px; border-width: 1.5px; }
 .day .echo { padding: 4px 0 4px 7px; } .day .echo .e-text { font-size: 13.5px; }
 .dayempty { min-height: 8px; }
-.addday { position: absolute; bottom: 4px; left: 8px; color: var(--pencil-l); font-size: 15px; opacity: 0; transition: opacity .15s; }
+/* in flow, not absolute — the day no longer keeps 26px of bottom padding for it */
+.addday { display: block; margin-top: 2px; padding: 2px 4px; color: var(--pencil-l); font-size: 15px; line-height: 1; opacity: 0; transition: opacity .15s; }
 .day:hover .addday { opacity: .8; }
+.addday:focus-visible { opacity: .8; }
 
 .band { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 8px; }
 .band.later { opacity: .8; }
@@ -314,6 +320,9 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 
 /* bill / back rows */
 .brow .bwhen { font-size: 12px; color: var(--pencil-l); text-align: right; }
+/* the bill's due line, sitting under the name (indented past the tick) */
+.bmeta { margin: 1px 0 0 29px; }
+.bmeta .bwhen { text-align: left; }
 .brow .bamt { font-size: 15.5px; font-weight: 600; min-width: 70px; text-align: right; }
 .brow .bamt.est { color: var(--pencil); font-weight: 400; }
 .brow.due-soon .bwhen { color: var(--amber-firm); font-weight: 600; }
@@ -425,6 +434,21 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   .owed-cols { gap: 0 8px; }
   .bthumb { font-size: 10px; padding: 8px 5px; }
   .ribbon { right: 14px; }
+
+  .day .dayempty { height: 6px; }
+
+  /* Six tabs overflowed the bar by 3px, so it drifted sideways on every tap. */
+  .tabs { gap: 5px; padding-left: 10px; padding-right: 10px; }
+  .tab { padding: 7px 9px; }
+
+  /* Bill names were squeezed to ~100px between the tick and the amount and
+     wrapped to three lines. Give the name the line; due date goes beneath. */
+  .addform input[name="name"], .addform input[name="what"] { flex: 1 1 100%; }
+}
+
+/* `+` to add to a day only appeared on :hover — unreachable on a touch screen. */
+@media (hover: none) {
+  .addday { opacity: .8; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -1459,9 +1483,9 @@ Rules, non-negotiable:
           ${du != null && du <= 0 && !b.bill.autopay ? '<span class="flag">⚑</span>' : ''}
           <button class="tick" data-act="paybill" type="button" aria-label="mark paid"></button>
           <span class="row-text hand" data-act="open">${esc(b.text)}${b.bill.autopay ? '<span class="autotag fig">AUTOPAY</span>' : ''}${b.sample ? '<span class="sampletag">sample</span>' : ''}</span>
-          <span class="bwhen fig">${dueTxt}</span>
           <span class="bamt fig ${b.bill.estimated ? 'est' : ''}">${b.bill.amount != null ? (b.bill.estimated ? '~' : '') + '$' + NB.fmtAmt(b.bill.amount) : '$?'}</span>
         </div>
+        ${due ? `<div class="bmeta"><span class="bwhen fig">${dueTxt}</span></div>` : ''}
         ${b.question ? stickyHTML(b) : ''}
         ${open ? detailHTML(b) : ''}
       </div>`;
