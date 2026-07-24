@@ -67,9 +67,19 @@ assigns).
    config (`EXTRACT_SCHEMA`) and `effort: 'low'`. Handles `stop_reason:
    'refusal'` and non-OK responses with human-readable errors.
 2. **`localExtract`** — the offline brain. Regex/heuristic parsing
-   (`parseWhen` for dates, name/birthday/amount patterns). Always available, no
-   key, no network. **It must keep working on its own** — the key is optional and
-   the app has to be fully usable without one.
+   (`parseWhen` for dates, `parseAmount` for money, name/birthday patterns).
+   Always available, no key, no network. **It must keep working on its own** —
+   the key is optional and the app has to be fully usable without one.
+
+`parseAmount(seg, moneyish)` reads `$1,200`, `60 bucks`, a bare `142.50`, and —
+only in a bill/debt sentence — a bare number, after date fragments are stripped
+so `due the 8th` isn't read as `$8`. It trusts a bare number only when exactly
+one survives that stripping. Widen it carefully: every loosening risks reading a
+date, a time or a quantity as money.
+
+Segment order in `localExtract` is significant — the first matching branch wins.
+`insurance` is in both `BILL_WORDS` and `RENEWAL_RE`, so the renewal branch
+explicitly stands aside when there's an amount.
 
 The API key is stored in localStorage on the device only, is never sent
 anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
@@ -83,6 +93,12 @@ anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
 Tabs: `today · week · goals · ideas · done · back`. "Back Pages" holds the
 sub-pages: Bills, People, Renewals, Owed, Health — and shows a dot when any of
 those has a parked question.
+
+**Week stacks, it isn't a spread.** `.app` caps at `max-width: 760px`, so a
+7-across grid can't fit its column at any viewport — the old
+`grid-template-columns: repeat(7, minmax(128px,1fr))` with `min-width: 940px`
+overflowed everywhere and hid Sunday behind a scrollbar phones don't draw. Don't
+reintroduce a horizontal week without widening `.app` first.
 
 Rendering is full-redraw string templating: each view returns an HTML string,
 `render()` swaps `#page.innerHTML`, `renderTabs()` swaps the nav. No virtual DOM,
@@ -129,6 +145,13 @@ completes.
   out, `backdrop-filter: blur(3px)` covers the viewport, and every tap on the app
   is swallowed. Don't remove it; don't add another `display` rule to a
   `[hidden]`-toggled element without an `!important` guard.
+- The fixed `.ribbon` (26px wide, `z-index: 30`) sits in the top-right corner
+  above the chrome. `.chrome` reserves 48px of right padding to clear it —
+  without that the ribbon overlaps the dump button and silently eats its taps.
+  Anything else placed top-right needs the same clearance.
+- `.addday` (the per-day `+`) reveals on `:hover`, which no touch screen has;
+  the `@media (hover: none)` block keeps it visible. Watch for the same trap
+  with any other hover-only affordance.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`
   file, on purpose.
 - No service worker is registered (the `'serviceWorker' in navigator` branch is
@@ -143,5 +166,9 @@ completes.
 - Since there are no tests, verify by opening the file in a browser and
   exercising the path you changed — dump something, check the tab it lands in,
   toggle both themes.
+- Layout claims need measuring, not eyeballing. Two of the bugs above
+  (`elementFromPoint` returning the ribbon over the dump button; `.weekscroll`
+  at 346px holding a 940px grid) were invisible in a screenshot and obvious in
+  a `getBoundingClientRect` dump. Check at 390px wide, not just desktop.
 - Diffs on `index.html` are the entire changelog. Keep changes surgical and the
   commit message explanatory (say *why*, like the overlay fix did).
