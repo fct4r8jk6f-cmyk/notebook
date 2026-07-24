@@ -766,6 +766,31 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   }
   NB.parseWhen = parseWhen;
 
+  /* Money, the way people actually dump it. A literal $ is the strongest signal,
+     but almost nobody types one — "electric bill 142.50", "dave owes me 60 bucks",
+     "rent 1200". Bare numbers are only trusted in a bill/debt sentence, and only
+     once the date words are out of the way, so "due the 8th" isn't read as $8. */
+  function parseAmount(seg, moneyish) {
+    const num = (s) => Number(s.replace(/,/g, ''));
+    const dollar = seg.match(/\$\s?([\d,]+(?:\.\d+)?)/);
+    if (dollar) return num(dollar[1]);
+    const worded = seg.match(/\b([\d,]+(?:\.\d+)?)\s*(?:bucks?|dollars?|quid|euros?|pounds?|usd)\b/i);
+    if (worded) return num(worded[1]);
+    const cents = seg.match(/\b(\d[\d,]*\.\d{2})\b/);
+    if (cents) return num(cents[1]);
+    if (!moneyish) return null;
+    const bare = seg
+      .replace(/\b(?:on|by|due)?\s*the\s+\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
+      .replace(/\b\d{1,2}(?:st|nd|rd|th)\b/gi, ' ')
+      .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/gi, ' ')
+      .replace(/\b\d{1,2}\s*[:.]\s*\d{2}\s*(?:am|pm)?\b/gi, ' ')
+      .replace(/\b\d{1,2}\s*(?:am|pm)\b/gi, ' ')
+      .match(/\b\d[\d,]*(?:\.\d+)?\b/g);
+    /* one number left and nothing to confuse it with — that's the money */
+    return bare && bare.length === 1 ? num(bare[0]) : null;
+  }
+  NB.parseAmount = parseAmount;
+
   function localExtract(text) {
     const segs = text
       .replace(/([.!?])\s+/g, '$1\n')                 /* sentence break — no lookbehind (iOS Safari) */
@@ -776,8 +801,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
     for (const seg of segs.slice(0, 12)) {
       if (items.length >= 6) break;
       const { date, time } = parseWhen(seg);
-      const amt = seg.match(/\$\s?([\d,]+(?:\.\d{2})?)/);
-      const amount = amt ? Number(amt[1].replace(/,/g, '')) : null;
+      const amount = parseAmount(seg, BILL_WORDS.test(seg) || OWE_RE.test(seg));
       const lower = seg.toLowerCase();
       const firstWord = lower.replace(/^(i |we |you |please |gotta |need to |have to |don't forget to |remember to )+/, '').split(/\s+/)[0];
       const imperative = VERBS.includes(firstWord);
@@ -790,11 +814,16 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
         continue;
       }
       if (OWE_RE.test(seg)) {
-        const dir = /\b(i owe|i borrowed|i still owe)\b/i.test(seg) ? 'me' : 'they';
-        items.push({ kind: 'debt', text: title, quote: seg, date: null, time: null, amount, confidence: 'unsure', question: 'Who owes whom?', dir });
+        /* "dave owes me 60" says which way round it goes — only ask when it doesn't. */
+        const iOwe = /\b(i owe|i borrowed|i still owe|lent me|paid for me)\b/i.test(seg);
+        const theyOwe = /\b(owes? (me|us)|i lent|pay me back|borrowed from me)\b/i.test(seg);
+        const clear = iOwe !== theyOwe;
+        items.push({ kind: 'debt', text: title, quote: seg, date: null, time: null, amount, confidence: clear ? 'sure' : 'unsure', question: clear ? null : 'Who owes whom?', dir: iOwe ? 'me' : 'they' });
         continue;
       }
-      if (RENEWAL_RE.test(seg)) {
+      /* "insurance" is both a renewal and a bill word. With money attached it's a
+         bill ("insurance 340 due the 15th"); without, it's a thing that expires. */
+      if (RENEWAL_RE.test(seg) && !(amount != null && BILL_WORDS.test(seg))) {
         items.push({ kind: 'renewal', text: title, quote: seg, date, time: null, amount: null, confidence: date ? 'sure' : 'unsure', question: date ? null : 'When does it expire?' });
         continue;
       }
