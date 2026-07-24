@@ -430,7 +430,13 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 /* ---------------- misc ---------------- */
 @media (max-width: 560px) {
   .pagetitle { font-size: 26px; }
-  .owed-cols { gap: 0 8px; }
+  /* "Renewals & Deadlines" wraps at this width and squeezed its subtitle into
+     the corner — give the subtitle its own line. */
+  .pagehead { flex-direction: column; align-items: flex-start; gap: 2px; }
+  /* Two columns inside a ~314px back page left 59px for the name — six lines of
+     wrap per row, and 19px of horizontal overflow. Stack the two directions. */
+  .owed-cols { grid-template-columns: 1fr; gap: 14px 0; }
+  .owed-col:first-child { border-right: 0; padding-right: 0; border-bottom: 1px dashed var(--line); padding-bottom: 12px; }
   .bthumb { font-size: 10px; padding: 8px 5px; }
   .ribbon { right: 14px; }
 
@@ -827,11 +833,15 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   const VERBS = 'call text email message buy get grab book pay renew pick send fix clean schedule cancel return finish submit order drop take bring check ask water walk feed read write plan visit sign print wash move update reply remind'.split(' ');
   const GOAL_RE = /\b(finally|some ?day|this year|next year|bucket list|dream of|want to|we should really|life goal|one day)\b/i;
   const HEDGE_RE = /\b(idk|maybe|might|possibly|thinking about|not sure|kinda|sorta|perhaps)\b|\?\s*$/i;
-  const OWE_RE = /\b(owes? (me|you|us)|i owe|lent|borrowed|pay (me|you) back|paid for me)\b/i;
+  const OWE_RE = /\b(owes? (me|you|us)|i owe|lent|borrowed|pay (me|you) back|paid for me|covered (?:for )?me|covered the|spotted me|fronted me|i covered)\b/i;
+  /* which way the money runs. Shared with the Owed page's add form — both read
+     the same sentence, so both should reach the same conclusion. */
+  const I_OWE_RE = /\b(i owe|i borrowed|i still owe|lent me|paid for me|covered (?:for )?me|covered the|spotted me|fronted me)\b/i;
+  const THEY_OWE_RE = /\b(owes? (me|us)|i lent|i covered|i spotted|i fronted|pay me back|borrowed from me)\b/i;
   const BILL_WORDS = /\b(rent|bill|electricity|electric|water bill|internet|wifi|phone bill|subscription|insurance|utilities|gas bill)\b/i;
   /* things that are plainly a payment without ever saying "bill" */
   const PAY_WORDS = /\b(membership|mortgage|loan|premium|dues|fees?|instal?ments?|direct debit|standing order|cleaner|childcare|daycare|storage|parking|tuition|gym)\b/i;
-  const RENEWAL_RE = /\b(passport|licen[cs]e|registration|rego|visa|lease|insurance) .*\b(expires?|renewal?|due|runs out)\b|\b(expires?|renew)\b.*\b(passport|licen[cs]e|registration|rego|visa|lease)\b/i;
+  const RENEWAL_RE = /\b(passport|licen[cs]e|registration|rego|visa|lease|insurance) .*\b(expires?|renewal?|due|runs out|is up|ends|up for renewal)\b|\b(expires?|renew)\b.*\b(passport|licen[cs]e|registration|rego|visa|lease)\b/i;
   const HEALTH_RE = /\b(doctor|dentist|dr\.?\s|appointment|prescription|refill|check-?up|physio|therapist|meds)\b/i;
   const ROUTINE_RE = /\bevery (day|morning|night|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b|\bdaily\b/i;
 
@@ -914,6 +924,13 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   }
   NB.parseAmount = parseAmount;
 
+  /* Read a debt sentence: which direction, and how much. */
+  function readDebt(seg) {
+    const iOwe = I_OWE_RE.test(seg), theyOwe = THEY_OWE_RE.test(seg);
+    return { dir: iOwe ? 'me' : 'they', clear: iOwe !== theyOwe, amount: parseAmount(seg, true) };
+  }
+  NB.readDebt = readDebt;
+
   /* "every 2 weeks", "biweekly", "quarterly" — the rhythm, said out loud */
   const CADENCE_RE = /\b(?:every\s+(?:other\s+week|2\s+weeks|two\s+weeks|fortnight|week|month|quarter|year|3\s+months|three\s+months|12\s+months)|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annual(?:ly)?|one-?off|once)\b/i;
   function parseCadence(seg) {
@@ -949,10 +966,8 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 
       if (OWE_RE.test(seg)) {
         /* "dave owes me 60" says which way round it goes — only ask when it doesn't. */
-        const iOwe = /\b(i owe|i borrowed|i still owe|lent me|paid for me)\b/i.test(seg);
-        const theyOwe = /\b(owes? (me|us)|i lent|pay me back|borrowed from me)\b/i.test(seg);
-        const clear = iOwe !== theyOwe;
-        items.push({ kind: 'debt', text: title, quote: seg, date: null, time: null, amount, confidence: clear ? 'sure' : 'unsure', question: clear ? null : 'Who owes whom?', dir: iOwe ? 'me' : 'they' });
+        const d = readDebt(seg);
+        items.push({ kind: 'debt', text: title, quote: seg, date: null, time: null, amount: amount != null ? amount : d.amount, confidence: d.clear ? 'sure' : 'unsure', question: d.clear ? null : 'Who owes whom?', dir: d.dir });
         continue;
       }
       /* "insurance" is both a renewal and a bill word. With money attached it's a
@@ -2092,9 +2107,11 @@ Rules, non-negotiable:
       }
       if (kind === 'renewal') NB.addItem({ kind: 'renewal', text: fd.get('name'), source: src, renewal: { expires: fd.get('date') || null } });
       if (kind === 'debt') {
+        /* same reading as a dumped sentence — this form used to need a literal $
+           and only understood "i owe", so "I borrowed 50 from Jo" came out backwards */
         const what = fd.get('what') || '';
-        const amt = what.match(/\$\s?([\d,]+(?:\.\d{2})?)/);
-        NB.addItem({ kind: 'debt', text: what, source: src, debt: { dir: /\bi owe\b/i.test(what) ? 'me' : 'they', amount: amt ? Number(amt[1].replace(/,/g, '')) : null } });
+        const d = NB.readDebt(what);
+        NB.addItem({ kind: 'debt', text: what, source: src, debt: { dir: d.dir, amount: d.amount } });
       }
       if (kind === 'health') NB.addItem({ kind: 'health', text: fd.get('name'), source: src, date: fd.get('date') || null, time: fd.get('time') || null });
     });
