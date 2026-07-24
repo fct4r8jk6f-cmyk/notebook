@@ -3,7 +3,7 @@
 A single-file, local-first PWA: a paper notebook that files your life for you.
 Deployed via GitHub Pages off `main`.
 You paste messy life into it ("the dump"), and a librarian sorts it into dated
-items, bills, people, renewals, debts and health notes.
+items, bills, renewals, debts and health notes.
 
 ## The one rule
 
@@ -47,10 +47,10 @@ assigns).
 ```
 { id, kind, text, ink, date, time, bucket, done, doneAt, carried, sample,
   source: {quote, at, via}, question: {q, options:[{label, act}]},
-  bill, person, renewal, debt, goal }
+  bill, renewal, debt, goal }
 ```
 
-- **kinds**: `task · bill · goal · idea · person · renewal · debt · health · routine · scrap`
+- **kinds**: `task · bill · goal · idea · renewal · debt · health · routine · scrap`
 - **bucket**: `day | week | next-week | someday | goals | ideas`
 - `sample: true` marks the watermark seed items — `clearSamples()` deletes all of
   them the moment the first real dump lands. Seeds must never survive real use.
@@ -67,7 +67,7 @@ assigns).
    config (`EXTRACT_SCHEMA`) and `effort: 'low'`. Handles `stop_reason:
    'refusal'` and non-OK responses with human-readable errors.
 2. **`localExtract`** — the offline brain. Regex/heuristic parsing
-   (`parseWhen` for dates, `parseAmount` for money, name/birthday patterns).
+   (`parseWhen` for dates, `parseAmount` for money, `parseCadence` for rhythms).
    Always available, no key, no network. **It must keep working on its own** —
    the key is optional and the app has to be fully usable without one.
 
@@ -88,11 +88,40 @@ anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
 `askDesk(question)` is the ribbon/chat path — same API, feeds it
 `notebookDigest()` as context. Also key-gated.
 
+## Bill rhythms
+
+Bills repeat on a `cadence`: `weekly · fortnightly · monthly · quarterly ·
+yearly · once` (see `CADENCE`). Two shapes exist and the distinction matters:
+
+- **Plain monthly** — `dueDay` (day-of-month), `anchor: null`. Paid keys are
+  `YYYY-MM`. This is what every bill looked like before cadences, so notebooks
+  written then keep every tick. `isPlainMonthly()` is the test.
+- **Everything else** — an `anchor` date, one known occurrence. Paid keys are
+  the occurrence date itself (`YYYY-MM-DD`).
+
+`billNth(it, n)` always measures from the anchor, never by stepping the previous
+result: a month-end date clamped once (Nov 31 → Nov 30) would otherwise keep the
+shorter day forever and drift earlier every period. Don't "simplify" it into a
+loop that adds a month to the last result.
+
+`billMonthTotals(it, mk)` splits a month into `due / paid / unpaid` by counting
+occurrences — a fortnightly bill lands twice in most months, and a weekly bill
+ticked once is not ticked four times. Never total a bill as `amount × 1`.
+
+Changing a bill's cadence resets `paid` (a cycle means something different
+afterwards) and carries the date across by reading `billDueDate` *before*
+switching.
+
 ## Views
 
 Tabs: `today · week · goals · ideas · done · back`. "Back Pages" holds the
-sub-pages: Bills, People, Renewals, Owed, Health — and shows a dot when any of
-those has a parked question.
+sub-pages: Bills, Renewals, Owed, Health — and shows a dot when any of those has
+a parked question.
+
+There is no People page. It was removed along with the `person` kind and
+birthday extraction; `migrate()` in `load()` turns any surviving `person` item
+into an idea so old notebooks don't strand data. Don't reintroduce a `person`
+kind without a page to show it on.
 
 **Week stacks, it isn't a spread.** `.app` caps at `max-width: 760px`, so a
 7-across grid can't fit its column at any viewport — the old
