@@ -602,7 +602,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
     return {
       id: uid(), kind: 'task', text: '', ink: true, date: null, time: null,
       bucket: 'day',           /* day | week | next-week | someday | goals | ideas */
-      done: false, doneAt: null, carried: 0, sample: false,
+      done: false, doneAt: null, doneKey: null, carried: 0, sample: false,
       source: null,            /* {quote, at, via} */
       question: null,          /* {q, options:[{label, act}]} — parked sticky */
       bill: null, renewal: null, debt: null, goal: null,
@@ -1257,15 +1257,30 @@ Rules, non-negotiable:
   NB.brief = brief; NB.fmtTime = fmtTime; NB.fmtAmt = fmtAmt;
 
   /* ---------------- flip to… (search) ---------------- */
+  /* Words that carry no signal in a question to the book. */
+  const STOPWORDS = new Set(('a an and any are as at be been by can did do does for from get got has have how i if in is it its me my of on or our so the their them then there these they this to was we were what when where which who whom why will with you your').split(' '));
+
+  /* Match on terms, not the whole phrase. This used to be hay.includes(needle)
+     with the entire question as the needle — so "when's rent due?" only matched
+     an item literally containing that sentence, and the keyless Desk answered
+     "nothing in the book" to almost everything. */
   function search(q) {
     const needle = q.trim().toLowerCase();
     if (!needle) return [];
+    const terms = needle.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/)
+      .filter((w) => w.length > 1 && !STOPWORDS.has(w));
+    if (!terms.length) return [];
     const scored = [];
     for (const it of state.items) {
-      const hay = `${it.text} ${(it.source && it.source.quote) || ''}`.toLowerCase();
-      if (hay.includes(needle)) scored.push(it);
+      const hay = `${it.text} ${(it.source && it.source.quote) || ''} ${it.kind}`.toLowerCase();
+      let n = 0;
+      /* "bills" should find a bill — the plural is how people ask */
+      for (const t of terms) if (hay.includes(t) || (t.endsWith('s') && hay.includes(t.slice(0, -1)))) n++;
+      if (!n) continue;
+      /* the whole phrase landing intact is worth more than the sum of its words */
+      scored.push({ it, n: hay.includes(needle) ? n + terms.length : n });
     }
-    return scored.slice(0, 12);
+    return scored.sort((a, b) => b.n - a.n).slice(0, 12).map((s) => s.it);
   }
   NB.search = search;
 
@@ -1600,6 +1615,15 @@ Rules, non-negotiable:
     `;
   }
 
+  /* "2026-07-22" is a filename, not a day. */
+  function doneDayLabel(k) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return esc(k);
+    const t = D.todayKey();
+    if (k === t) return 'today';
+    if (k === D.addDays(t, -1)) return 'yesterday';
+    return esc(D.niceDate(k));
+  }
+
   function doneView() {
     const done = NB.itemsFor((i) => i.done && i.kind !== 'routine').sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
     const groups = {};
@@ -1612,7 +1636,7 @@ Rules, non-negotiable:
       ${pageTitle('Done', 'look what you did')}
       ${keys.map((k) => `
         <div class="doneday">
-          <span class="band-label fig">${k === D.todayKey() ? 'today' : esc(k)}</span>
+          <span class="band-label fig">${doneDayLabel(k)}</span>
           <div class="rows">${groups[k].map((i) => rowHTML(i)).join('')}</div>
         </div>`).join('')}
       ${done.length === 0 ? emptyLine('Nothing finished yet — that\'s the point. Tick something and watch it arrive here, proud.') : ''}
