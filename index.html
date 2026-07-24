@@ -38,7 +38,7 @@
   --green: #2F6B40; --green-wash: #DDE8D6;
   --ochre: #7E6118; --sticky: #F5E9BC; --sticky-ink: #4A452C;
   --ribbon: #3E5C50; --kraft: #C9A876;
-  --a-bills: #3E6B4F; --a-people: #7B4B63; --a-renewals: #4A6274; --a-owes: #A9683C; --a-health: #3F7E76;
+  --a-bills: #3E6B4F; --a-renewals: #4A6274; --a-owes: #A9683C; --a-health: #3F7E76;
   --shadow: rgba(70, 55, 25, .22); --shadow-soft: rgba(70, 55, 25, .12);
   --hand: 'Shantell Sans', 'Segoe Print', cursive;
   --disp: 'Caveat', 'Segoe Print', cursive;
@@ -53,7 +53,7 @@
   --green: #8FBE97; --green-wash: rgba(143, 190, 151, .14);
   --ochre: #CFB264; --sticky: #4A4128; --sticky-ink: #E8DDB8;
   --kraft: #8A6E44;
-  --a-bills: #5E8F72; --a-people: #9C6B83; --a-renewals: #6B8395; --a-owes: #C68A5C; --a-health: #609F96;
+  --a-bills: #5E8F72; --a-renewals: #6B8395; --a-owes: #C68A5C; --a-health: #609F96;
   --shadow: rgba(0, 0, 0, .5); --shadow-soft: rgba(0, 0, 0, .3);
 }
 
@@ -219,7 +219,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 }
 .echo .e-text { font-size: 15px; cursor: pointer; flex: 1; }
 .echo .e-amt { font-size: 13px; font-weight: 600; }
-.e-bill { color: var(--a-bills); } .e-bday { color: var(--a-people); }
+.e-bill { color: var(--a-bills); }
 .e-renewal { color: var(--a-renewals); } .e-health { color: var(--a-health); }
 .dogear { width: 11px; height: 11px; opacity: .55; cursor: pointer; background: linear-gradient(135deg, transparent 52%, currentColor 52%); }
 
@@ -295,12 +295,11 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   clip-path: polygon(0 2%, 100% 0, 100% 98%, 8% 100%);
 }
 .bthumb.on { opacity: 1; font-weight: 700; }
-.b-bills { background: var(--a-bills); } .b-people { background: var(--a-people); }
+.b-bills { background: var(--a-bills); }
 .b-renewals { background: var(--a-renewals); } .b-owed, .b-owes { background: var(--a-owes); }
 .b-health { background: var(--a-health); }
 .backpage { flex: 1; min-width: 0; padding-left: 4px; border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .bp-bills { border-left-color: color-mix(in srgb, var(--a-bills) 30%, transparent); }
-.bp-people { border-left-color: color-mix(in srgb, var(--a-people) 30%, transparent); }
 .bp-renewals { border-left-color: color-mix(in srgb, var(--a-renewals) 30%, transparent); }
 .bp-owed { border-left-color: color-mix(in srgb, var(--a-owes) 30%, transparent); }
 .bp-health { border-left-color: color-mix(in srgb, var(--a-health) 30%, transparent); }
@@ -321,7 +320,8 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 /* bill / back rows */
 .brow .bwhen { font-size: 12px; color: var(--pencil-l); text-align: right; }
 /* the bill's due line, sitting under the name (indented past the tick) */
-.bmeta { margin: 1px 0 0 29px; }
+.bmeta { margin: 1px 0 0 29px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.bevery { font-size: 11px; color: var(--pencil-l); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
 .bmeta .bwhen { text-align: left; }
 .brow .bamt { font-size: 15.5px; font-weight: 600; min-width: 70px; text-align: right; }
 .brow .bamt.est { color: var(--pencil); font-weight: 400; }
@@ -334,7 +334,6 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 @keyframes softpulse { 0%, 100% { opacity: 1 } 50% { opacity: .5 } }
 .handled .row-text { color: var(--pencil-l); text-decoration: line-through; text-decoration-color: var(--green); }
 .whisperline { margin: 2px 0 0 30px; font-size: 12.5px; color: var(--pencil); }
-.monogram { flex: 0 0 auto; width: 26px; height: 26px; border: 1.5px solid var(--a-people); color: var(--a-people); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; transform: rotate(-3deg); }
 .owed-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 .owed-col:first-child { border-right: 1px dashed var(--line); padding-right: 12px; }
 .pageplain { color: var(--pencil-l); font-size: 12px; margin-top: 16px; }
@@ -546,6 +545,19 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   let state = load();
   let saveTimer = null;
 
+  /* Carry old notebooks forward. The People page is gone; anything filed there
+     becomes a loose page in Ideas rather than sitting in storage with nowhere
+     to show — the user can read it and toss it. Nothing is deleted on load. */
+  function migrate(items) {
+    return items.map((it) => {
+      if (it.kind !== 'person') return it;
+      const bd = it.person && it.person.birthday;
+      const when = bd ? ` (${bd})` : '';
+      const { person, ...rest } = it;
+      return { ...rest, kind: 'idea', bucket: 'ideas', text: `${it.text}${when}`, question: null };
+    });
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
@@ -556,7 +568,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
         ...base, ...parsed,
         settings: { ...base.settings, ...(parsed.settings || {}) },
         meta: { ...base.meta, ...(parsed.meta || {}) },
-        items: Array.isArray(parsed.items) ? parsed.items : [],
+        items: migrate(Array.isArray(parsed.items) ? parsed.items : []),
       };
     } catch (e) {
       try { const bad = localStorage.getItem(STORE_KEY); if (bad) localStorage.setItem(STORE_KEY + '-corrupt', bad); } catch (_) {}
@@ -579,7 +591,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   let idc = Date.now() % 1e7;
   function uid() { return 'i' + (idc++).toString(36) + Math.random().toString(36).slice(2, 6); }
 
-  /* kinds: task · bill · goal · idea · person · renewal · debt · health · routine · scrap */
+  /* kinds: task · bill · goal · idea · renewal · debt · health · routine · scrap */
   function makeItem(partial) {
     return {
       id: uid(), kind: 'task', text: '', ink: true, date: null, time: null,
@@ -587,7 +599,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
       done: false, doneAt: null, carried: 0, sample: false,
       source: null,            /* {quote, at, via} */
       question: null,          /* {q, options:[{label, act}]} — parked sticky */
-      bill: null, person: null, renewal: null, debt: null, goal: null,
+      bill: null, renewal: null, debt: null, goal: null,
       ...partial,
     };
   }
@@ -654,17 +666,130 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   NB.rollover = rollover;
 
   /* ---------------- selectors ---------------- */
-  function billCycleKey() { return monthKey(todayKey()); }
-  function billPaid(it, cycle) { return !!(it.bill && it.bill.paid && it.bill.paid[cycle || billCycleKey()]); }
-  function billDueDate(it) {
-    /* the next REAL due date: this cycle's if unpaid, else next cycle's */
-    if (!it.bill || !it.bill.dueDay) return null;
-    let [y, m] = billCycleKey().split('-').map(Number);
-    if (billPaid(it, `${y}-${pad(m)}`)) { m += 1; if (m > 12) { m = 1; y += 1; } }
-    const day = Math.min(it.bill.dueDay, new Date(y, m, 0).getDate());
-    return `${y}-${pad(m)}-${pad(day)}`;
+  /* ---- bill rhythms -------------------------------------------------------
+     Not everything arrives monthly. A bill repeats on a cadence counted from an
+     `anchor` date (a known occurrence). Monthly bills are the exception and keep
+     their plain `dueDay` day-of-month plus their YYYY-MM paid keys, so notebooks
+     written before cadences existed keep every tick they already had. */
+  const CADENCE = {
+    weekly:      { label: 'every week',      every: { days: 7 } },
+    fortnightly: { label: 'every 2 weeks',   every: { days: 14 } },
+    monthly:     { label: 'every month',     every: { months: 1 } },
+    quarterly:   { label: 'every 3 months',  every: { months: 3 } },
+    yearly:      { label: 'every year',      every: { months: 12 } },
+    once:        { label: 'one-off',         every: null },
+  };
+  NB.CADENCE = CADENCE;
+
+  function addMonths(key, n) {
+    const [y, m, d] = key.split('-').map(Number);
+    const t = new Date(y, m - 1 + n, 1);
+    const dim = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(Math.min(d, dim))}`;
   }
+
+  function billCadence(it) {
+    const c = it && it.bill && it.bill.cadence;
+    return CADENCE[c] ? c : 'monthly';
+  }
+  /* a plain day-of-month bill — the shape every bill had before cadences */
+  function isPlainMonthly(it) { return billCadence(it) === 'monthly' && !(it.bill && it.bill.anchor); }
+
+  /* the occurrence covering `ref` — the latest one on or before it, or the
+     first one if the bill hasn't started yet */
+  function billOccurrence(it, ref) {
+    const b = it && it.bill; if (!b) return null;
+    const cad = billCadence(it), every = CADENCE[cad].every;
+    if (cad === 'once') return b.anchor || null;
+    if (isPlainMonthly(it)) {
+      if (!b.dueDay) return null;
+      const [y, m] = ref.split('-').map(Number);
+      return `${y}-${pad(m)}-${pad(Math.min(b.dueDay, new Date(y, m, 0).getDate()))}`;
+    }
+    if (!b.anchor) return null;
+    if (b.anchor > ref) return b.anchor;
+    return billNth(it, billIndexOn(it, ref));
+  }
+  /* The nth occurrence counted from the anchor. Always measured from the anchor,
+     never by stepping the previous result — a month-end date clamped once (Nov 31
+     → Nov 30) would otherwise keep that shorter day forever and drift earlier. */
+  function billNth(it, n) {
+    const b = it.bill, every = CADENCE[billCadence(it)].every;
+    if (!b.anchor || !every) return n === 0 ? (b.anchor || null) : null;
+    if (every.days) return addDays(b.anchor, n * every.days);
+    const [ay, am, ad] = b.anchor.split('-').map(Number);
+    const t = new Date(ay, am - 1 + n * every.months, 1);
+    const dim = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(Math.min(ad, dim))}`;
+  }
+  /* index of the occurrence covering `ref` */
+  function billIndexOn(it, ref) {
+    const b = it.bill, every = CADENCE[billCadence(it)].every;
+    if (every.days) return Math.floor((fromKey(ref) - fromKey(b.anchor)) / DAY / every.days);
+    const [ay, am] = b.anchor.split('-').map(Number);
+    const [ry, rm] = ref.split('-').map(Number);
+    let n = Math.floor(((ry - ay) * 12 + (rm - am)) / every.months);
+    while (n > 0 && billNth(it, n) > ref) n--;
+    while (billNth(it, n + 1) <= ref) n++;
+    return n;
+  }
+  function billAfter(it, key) {
+    const every = CADENCE[billCadence(it)].every;
+    if (!every || !key) return null;
+    if (!it.bill.anchor) return every.days ? addDays(key, every.days) : addMonths(key, every.months);
+    return billNth(it, billIndexOn(it, key) + 1);
+  }
+  /* monthly keeps YYYY-MM keys; every other rhythm keys by the occurrence itself */
+  function cycleKeyFor(it, occ) { return isPlainMonthly(it) ? monthKey(occ) : occ; }
+
+  function billCycleKey(it) {
+    const occ = it ? billOccurrence(it, todayKey()) : null;
+    return occ ? cycleKeyFor(it, occ) : monthKey(todayKey());
+  }
+  function billPaid(it, cycle) { return !!(it && it.bill && it.bill.paid && it.bill.paid[cycle || billCycleKey(it)]); }
+  function billDueDate(it) {
+    /* the next REAL due date: this cycle's if unpaid, else the first one after
+       it that hasn't been ticked (a cycle can be paid ahead of time) */
+    let occ = billOccurrence(it, todayKey());
+    if (!occ) return null;
+    for (let i = 0; i < 24 && billPaid(it, cycleKeyFor(it, occ)); i++) {
+      const next = billAfter(it, occ);
+      if (!next) return null;          /* a one-off, already handled */
+      occ = next;
+    }
+    return occ;
+  }
+  /* how many times this bill lands inside a calendar month — a fortnightly bill
+     hits twice most months, so "due this month" has to count, not assume one */
+  function billOccurrencesInMonth(it, mk) {
+    if (!it.bill) return [];
+    const first = `${mk}-01`;
+    const last = `${mk}-${pad(new Date(Number(mk.slice(0, 4)), Number(mk.slice(5, 7)), 0).getDate())}`;
+    if (isPlainMonthly(it)) {
+      if (!it.bill.dueDay) return [];
+      return [billOccurrence(it, first)].filter(Boolean);
+    }
+    let k = billOccurrence(it, first);
+    if (!k) return [];
+    if (k < first) k = billAfter(it, k);
+    const out = [];
+    while (k && k <= last && out.length < 8) { out.push(k); k = billAfter(it, k); }
+    return out;
+  }
+  function billHitsInMonth(it, mk) { return billOccurrencesInMonth(it, mk).length; }
+  /* What this bill actually adds to a month, split by what's been ticked. A
+     weekly bill paid once is not a weekly bill paid four times. */
+  function billMonthTotals(it, mk) {
+    const amt = it.bill && it.bill.amount;
+    const occs = billOccurrencesInMonth(it, mk);
+    if (amt == null) return { due: 0, paid: 0, unpaid: 0, hits: occs.length };
+    const paidCount = occs.filter((o) => billPaid(it, cycleKeyFor(it, o))).length;
+    return { due: amt * occs.length, paid: amt * paidCount, unpaid: amt * (occs.length - paidCount), hits: occs.length };
+  }
+  function cadenceLabel(it) { return CADENCE[billCadence(it)].label; }
   NB.billCycleKey = billCycleKey; NB.billPaid = billPaid; NB.billDueDate = billDueDate;
+  NB.billHitsInMonth = billHitsInMonth; NB.billCadence = billCadence; NB.cadenceLabel = cadenceLabel;
+  NB.billMonthTotals = billMonthTotals; NB.billOccurrencesInMonth = billOccurrencesInMonth;
 
   function itemsFor(pred) { return state.items.filter(pred); }
   NB.itemsFor = itemsFor;
@@ -680,15 +805,11 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
         else out.tasks.push(it);
       }
       /* echoes — one object, two faces */
-      if (it.kind === 'bill' && it.bill && it.bill.dueDay && !billPaid(it)) {
+      if (it.kind === 'bill' && it.bill && !billPaid(it)) {
         const due = billDueDate(it);
+        if (!due) continue;
         /* on its due day — and an overdue bill rides Today until handled */
         if (due === key || (key === todayKey() && due < key)) out.echoes.push({ echo: 'bill', item: it });
-      }
-      if (it.kind === 'person' && it.person && it.person.birthday) {
-        const mo = Number(it.person.birthday.slice(0, 2)), da = Number(it.person.birthday.slice(3));
-        const dim = new Date(Number(key.slice(0, 4)), mo, 0).getDate();
-        if (key.slice(5) === `${pad(mo)}-${pad(Math.min(da, dim))}`) out.echoes.push({ echo: 'bday', item: it });
       }
       if (it.kind === 'renewal' && it.renewal && it.renewal.expires === key) {
         out.echoes.push({ echo: 'renewal', item: it });
@@ -707,8 +828,9 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   const GOAL_RE = /\b(finally|some ?day|this year|next year|bucket list|dream of|want to|we should really|life goal|one day)\b/i;
   const HEDGE_RE = /\b(idk|maybe|might|possibly|thinking about|not sure|kinda|sorta|perhaps)\b|\?\s*$/i;
   const OWE_RE = /\b(owes? (me|you|us)|i owe|lent|borrowed|pay (me|you) back|paid for me)\b/i;
-  const BDAY_RE = /\b(birthday|bday|b-day|turns \d+)\b/i;
   const BILL_WORDS = /\b(rent|bill|electricity|electric|water bill|internet|wifi|phone bill|subscription|insurance|utilities|gas bill)\b/i;
+  /* things that are plainly a payment without ever saying "bill" */
+  const PAY_WORDS = /\b(membership|mortgage|loan|premium|dues|fees?|instal?ments?|direct debit|standing order|cleaner|childcare|daycare|storage|parking|tuition|gym)\b/i;
   const RENEWAL_RE = /\b(passport|licen[cs]e|registration|rego|visa|lease|insurance) .*\b(expires?|renewal?|due|runs out)\b|\b(expires?|renew)\b.*\b(passport|licen[cs]e|registration|rego|visa|lease)\b/i;
   const HEALTH_RE = /\b(doctor|dentist|dr\.?\s|appointment|prescription|refill|check-?up|physio|therapist|meds)\b/i;
   const ROUTINE_RE = /\bevery (day|morning|night|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b|\bdaily\b/i;
@@ -780,6 +902,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
     if (cents) return num(cents[1]);
     if (!moneyish) return null;
     const bare = seg
+      .replace(CADENCE_RE, ' ')          /* "every 2 weeks" — the 2 is a rhythm, not money */
       .replace(/\b(?:on|by|due)?\s*the\s+\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
       .replace(/\b\d{1,2}(?:st|nd|rd|th)\b/gi, ' ')
       .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/gi, ' ')
@@ -791,6 +914,21 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   }
   NB.parseAmount = parseAmount;
 
+  /* "every 2 weeks", "biweekly", "quarterly" — the rhythm, said out loud */
+  const CADENCE_RE = /\b(?:every\s+(?:other\s+week|2\s+weeks|two\s+weeks|fortnight|week|month|quarter|year|3\s+months|three\s+months|12\s+months)|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annual(?:ly)?|one-?off|once)\b/i;
+  function parseCadence(seg) {
+    const m = seg.match(CADENCE_RE);
+    if (!m) return null;
+    const w = m[0].toLowerCase().replace(/[\s-]+/g, ' ');
+    if (/other week|2 weeks|two weeks|fortnight|biweekly|bi weekly/.test(w)) return 'fortnightly';
+    if (/week/.test(w)) return 'weekly';
+    if (/quarter|3 months|three months/.test(w)) return 'quarterly';
+    if (/year|annual|12 months/.test(w)) return 'yearly';
+    if (/month/.test(w)) return 'monthly';
+    if (/one off|once/.test(w)) return 'once';
+    return null;
+  }
+
   function localExtract(text) {
     const segs = text
       .replace(/([.!?])\s+/g, '$1\n')                 /* sentence break — no lookbehind (iOS Safari) */
@@ -801,18 +939,14 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
     for (const seg of segs.slice(0, 12)) {
       if (items.length >= 6) break;
       const { date, time } = parseWhen(seg);
-      const amount = parseAmount(seg, BILL_WORDS.test(seg) || OWE_RE.test(seg));
+      const amount = parseAmount(seg, BILL_WORDS.test(seg) || PAY_WORDS.test(seg) || OWE_RE.test(seg));
+      const cad = parseCadence(seg);
       const lower = seg.toLowerCase();
       const firstWord = lower.replace(/^(i |we |you |please |gotta |need to |have to |don't forget to |remember to )+/, '').split(/\s+/)[0];
       const imperative = VERBS.includes(firstWord);
       const clean = seg.replace(/^[-•*\s]+/, '').replace(/[.,;:?!\s]+$/, '');
       const title = clean.length > 64 ? clean.slice(0, 61) + '…' : clean;
 
-      if (BDAY_RE.test(seg)) {
-        const who = (seg.match(/\b([A-Z][a-z]+)(?:'s)?\s+(?:birthday|bday|b-day)/) || seg.match(/\b(mom|dad|mum|grandma|grandpa)\b/i) || [])[1] || null;
-        items.push({ kind: 'person', text: who ? `${cap(who)} — birthday` : title, quote: seg, date, time: null, amount: null, confidence: who && date ? 'sure' : 'unsure', question: date ? null : 'When is it?' });
-        continue;
-      }
       if (OWE_RE.test(seg)) {
         /* "dave owes me 60" says which way round it goes — only ask when it doesn't. */
         const iOwe = /\b(i owe|i borrowed|i still owe|lent me|paid for me)\b/i.test(seg);
@@ -823,17 +957,19 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
       }
       /* "insurance" is both a renewal and a bill word. With money attached it's a
          bill ("insurance 340 due the 15th"); without, it's a thing that expires. */
-      if (RENEWAL_RE.test(seg) && !(amount != null && BILL_WORDS.test(seg))) {
+      if (RENEWAL_RE.test(seg) && !(amount != null && (BILL_WORDS.test(seg) || PAY_WORDS.test(seg)))) {
         items.push({ kind: 'renewal', text: title, quote: seg, date, time: null, amount: null, confidence: date ? 'sure' : 'unsure', question: date ? null : 'When does it expire?' });
         continue;
       }
-      if (BILL_WORDS.test(seg) && (amount || /\bdue\b/i.test(seg))) {
+      if ((BILL_WORDS.test(seg) || PAY_WORDS.test(seg)) && (amount != null || cad || /\bdue\b/i.test(seg))) {
         let name = title.replace(/\s*\$[\d,.]+/g, '')
           .replace(/\s+(?:is\s+|was\s+)?(?:due|going up|goes up|up to|now)\b.*$/i, '')
           .replace(/^(?:the|my|our)\s+/i, '').replace(/[.,;:?!\s]+$/, '').trim();
-        if (!name) name = (seg.match(BILL_WORDS) || ['bill'])[0];
+        if (!name) name = (seg.match(BILL_WORDS) || seg.match(PAY_WORDS) || ['bill'])[0];
         name = name[0].toUpperCase() + name.slice(1);
-        items.push({ kind: 'bill', text: name, quote: seg, date, time: null, amount, confidence: amount && date ? 'sure' : 'unsure', question: amount ? (date ? null : 'When is it due?') : 'How much is it?' });
+        name = name.replace(CADENCE_RE, '').replace(/\s{2,}/g, ' ').replace(/[.,;:\s]+$/, '').trim() || name;
+        if (amount != null) name = name.replace(/\s+\$?\d[\d,]*(?:\.\d+)?$/, '').trim() || name;
+        items.push({ kind: 'bill', text: name, quote: seg, date, time: null, amount, cadence: cad, confidence: amount && date ? 'sure' : 'unsure', question: amount ? (date ? null : 'When is it due?') : 'How much is it?' });
         continue;
       }
       if (HEALTH_RE.test(seg) && (date || time)) {
@@ -872,17 +1008,18 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
         items: {
           type: 'object', additionalProperties: false,
           properties: {
-            kind: { type: 'string', enum: ['task', 'routine', 'bill', 'goal', 'idea', 'person', 'renewal', 'debt', 'health'] },
+            kind: { type: 'string', enum: ['task', 'routine', 'bill', 'goal', 'idea', 'renewal', 'debt', 'health'] },
             text: { type: 'string', description: 'Short imperative label for the notebook, ≤60 chars.' },
             quote: { type: 'string', description: 'The verbatim source span this came from.' },
-            date: { type: ['string', 'null'], description: 'YYYY-MM-DD, or MM-DD for birthdays, or null.' },
+            date: { type: ['string', 'null'], description: 'YYYY-MM-DD, or null.' },
             time: { type: ['string', 'null'], description: '24h HH:MM or null.' },
             amount: { type: ['number', 'null'] },
             dir: { type: ['string', 'null'], enum: ['they', 'me', null], description: 'debt only: they owe user, or user owes them.' },
+            cadence: { type: ['string', 'null'], enum: ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'once', null], description: 'bill only: how often it repeats. Default monthly; fortnightly for "every 2 weeks".' },
             confidence: { type: 'string', enum: ['sure', 'unsure'] },
             question: { type: ['string', 'null'], description: 'ONE short question if unsure, else null.' },
           },
-          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'confidence', 'question'],
+          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'cadence', 'confidence', 'question'],
         },
       },
     },
@@ -894,8 +1031,9 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 Rules, non-negotiable:
 - Be conservative. Fewer, higher-confidence items. Past-tense chatter, jokes, and social filler produce NOTHING. Cap at 6 items.
 - Never invent details. Every item cites the verbatim source span in "quote". Missing facts stay null — never guessed.
-- Resolve relative dates against today: ${today} (${dayName(today)}). Output dates as YYYY-MM-DD. Birthdays (kind person) use MM-DD.
-- kinds: task (a one-off to-do) · routine (recurring keep-up, "every sunday") · bill (money due: amount and/or due date) · goal (aspiration: "finally", "this year") · idea (someday thought, not actionable now) · person (a birthday/occasion) · renewal (passport/rego/insurance/lease expiry) · debt (who owes whom, money or favours) · health (appointment/meds — keep text plain and kind).
+- Resolve relative dates against today: ${today} (${dayName(today)}). Output dates as YYYY-MM-DD.
+- Bills repeat: set cadence from the words ("every 2 weeks" → fortnightly, "quarterly", "annual" → yearly). Monthly if unsaid. For a non-monthly bill, date is the NEXT time it lands.
+- kinds: task (a one-off to-do) · routine (recurring keep-up, "every sunday") · bill (money due: amount and/or due date) · goal (aspiration: "finally", "this year") · idea (someday thought, not actionable now) · renewal (passport/rego/insurance/lease expiry) · debt (who owes whom, money or favours) · health (appointment/meds — keep text plain and kind).
 - Hedged or ambiguous ("idk maybe talk to Dana?") → confidence "unsure" with ONE short question ("To-do, or just a thought?"). Never confidently file a guess.
 - "text" is a clean, short label in the user's own words where possible.`;
 
@@ -957,13 +1095,17 @@ Rules, non-negotiable:
 
       if (r.kind === 'bill') {
         const due = norm(r.date);
+        const cad = CADENCE[r.cadence] ? r.cadence : 'monthly';
         it = addItem({
           kind: 'bill', text: r.text, ink: !unsure && r.amount != null, source: src, bucket: 'day', date: null,
-          bill: { amount: r.amount, estimated: r.amount == null || unsure, dueDay: due ? Number(due.slice(8)) : null, autopay: false, cadence: 'monthly', paid: {} },
+          bill: {
+            amount: r.amount, estimated: r.amount == null || unsure,
+            /* monthly keeps a day-of-month; any other rhythm counts from the date itself */
+            dueDay: cad === 'monthly' && due ? Number(due.slice(8)) : null,
+            anchor: cad === 'monthly' ? null : due,
+            autopay: false, cadence: cad, paid: {},
+          },
         });
-      } else if (r.kind === 'person') {
-        const bd = r.date && /^\d{2}-\d{2}$/.test(r.date) ? r.date : (norm(r.date) ? r.date.slice(5) : null);
-        it = addItem({ kind: 'person', text: r.text, ink: !unsure, source: src, bucket: 'day', person: { birthday: bd, notes: [] } });
       } else if (r.kind === 'renewal') {
         it = addItem({ kind: 'renewal', text: r.text, ink: !unsure, source: src, bucket: 'day', renewal: { expires: norm(r.date) } });
       } else if (r.kind === 'debt') {
@@ -1054,16 +1196,11 @@ Rules, non-negotiable:
 
     /* line 2 — THE heads-up, by the ladder. Wit OFF here. */
     let l2 = null;
-    const cycle = billCycleKey();
     const healthSoon = state.items.find((i) => i.kind === 'health' && !i.done && i.date && daysUntil(i.date) >= 0 && daysUntil(i.date) <= 1);
     const billSoon = state.items
-      .filter((i) => i.kind === 'bill' && i.bill && !i.bill.autopay && !billPaid(i, cycle) && i.bill.dueDay)
+      .filter((i) => i.kind === 'bill' && i.bill && !i.bill.autopay && !billPaid(i) && billDueDate(i))
       .map((i) => ({ i, du: daysUntil(billDueDate(i)) }))
       .filter((x) => x.du <= 3).sort((a, b) => a.du - b.du)[0];
-    const bdaySoon = state.items
-      .filter((i) => i.kind === 'person' && i.person && i.person.birthday)
-      .map((i) => ({ i, du: bdayDaysAway(i.person.birthday) }))
-      .filter((x) => x.du >= 0 && x.du <= 7).sort((a, b) => a.du - b.du)[0];
     const renewalSoon = state.items
       .filter((i) => i.kind === 'renewal' && i.renewal && i.renewal.expires)
       .map((i) => ({ i, du: daysUntil(i.renewal.expires) }))
@@ -1071,7 +1208,6 @@ Rules, non-negotiable:
 
     if (healthSoon) l2 = `${healthSoon.text} — ${daysUntil(healthSoon.date) === 0 ? 'today' : 'tomorrow'}${healthSoon.time ? ` at ${fmtTime(healthSoon.time)}` : ''}.`;
     else if (billSoon) l2 = `${billSoon.i.text}${billSoon.i.bill.amount ? `, $${fmtAmt(billSoon.i.bill.amount)}` : ''}, ${dueWord(billSoon.du)} — not on autopay, so it needs you.`;
-    else if (bdaySoon) l2 = `${bdaySoon.i.text} ${bdaySoon.du === 0 ? 'is today.' : bdaySoon.du === 1 ? 'is tomorrow.' : `in ${bdaySoon.du} days — enough runway to plan something.`}`;
     else if (renewalSoon) l2 = `${renewalSoon.i.text} — ${renewalSoon.du} days out. Time to start.`;
     else if (d.timed[0]) l2 = `First up: ${d.timed[0].text} at ${fmtTime(d.timed[0].time)}.`;
     else l2 = 'Nothing is due. I checked twice.';
@@ -1093,14 +1229,6 @@ Rules, non-negotiable:
 
     return { l1, l2, l3 };
   }
-  function bdayDaysAway(mmdd) {
-    const today = fromKey(todayKey());
-    const mo = Number(mmdd.slice(0, 2)) - 1, da = Number(mmdd.slice(3));
-    const mk = (yy) => { const dim = new Date(yy, mo + 1, 0).getDate(); return new Date(yy, mo, Math.min(da, dim)); };
-    let d = mk(today.getFullYear());
-    if (d < today) d = mk(today.getFullYear() + 1);
-    return Math.round((d - today) / DAY);
-  }
   function dueWord(du) { return du < 0 ? 'still open' : du === 0 ? 'due today' : du === 1 ? 'due tomorrow' : `due in ${du} days`; }
   function fmtTime(t) {
     if (!t) return '';
@@ -1111,7 +1239,7 @@ Rules, non-negotiable:
   function fmtAmt(n) { return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
   function numWord(n) { return ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] || String(n); }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-  NB.brief = brief; NB.fmtTime = fmtTime; NB.fmtAmt = fmtAmt; NB.bdayDaysAway = bdayDaysAway;
+  NB.brief = brief; NB.fmtTime = fmtTime; NB.fmtAmt = fmtAmt;
 
   /* ---------------- flip to… (search) ---------------- */
   function search(q) {
@@ -1128,15 +1256,13 @@ Rules, non-negotiable:
 
   /* ---------------- the Desk (ask the book) ---------------- */
   function notebookDigest() {
-    const cyc = billCycleKey();
     const compact = state.items.filter((i) => !i.sample).map((i) => {
       const o = { kind: i.kind, text: i.text };
       if (i.date) o.date = i.date;
       if (i.time) o.time = i.time;
       if (i.done) o.done = true;
       if (i.bucket && !['day'].includes(i.bucket)) o.where = i.bucket;
-      if (i.bill) { o.amount = i.bill.amount; o.dueDay = i.bill.dueDay; o.autopay = i.bill.autopay; o.paidThisMonth = billPaid(i, cyc); }
-      if (i.person) o.birthday = i.person.birthday;
+      if (i.bill) { o.amount = i.bill.amount; o.due = billDueDate(i); o.every = cadenceLabel(i); o.autopay = i.bill.autopay; o.paidThisCycle = billPaid(i); }
       if (i.renewal) o.expires = i.renewal.expires;
       if (i.debt) o.direction = i.debt.dir === 'they' ? 'they owe user' : 'user owes them';
       return o;
@@ -1229,7 +1355,7 @@ Rules, non-negotiable:
 
   /* ---------------- ui state ---------------- */
   let view = 'today';                 /* today | week | goals | ideas | done | back */
-  let backTab = 'bills';              /* bills | people | renewals | owed | health */
+  let backTab = 'bills';              /* bills | renewals | owed | health */
   let expandedId = null;
   let whisperTimer = null;
 
@@ -1273,7 +1399,7 @@ Rules, non-negotiable:
     { id: 'back', label: 'Back Pages', wash: 't-back' },
   ];
   function renderTabs() {
-    const dot = NB.itemsFor((i) => i.question && ['bill', 'person', 'renewal', 'debt', 'health'].includes(i.kind)).length > 0;
+    const dot = NB.itemsFor((i) => i.question && ['bill', 'renewal', 'debt', 'health'].includes(i.kind)).length > 0;
     $('#tabs').innerHTML = TABS.map((t) =>
       `<button type="button" class="tab ${t.wash} ${view === t.id ? 'on' : ''} ${t.id === 'back' ? 'kraft' : ''}" data-view="${t.id}">${t.label}${t.id === 'back' && dot ? '<span class="tab-dot"></span>' : ''}</button>`
     ).join('');
@@ -1329,18 +1455,21 @@ Rules, non-negotiable:
     const billBits = it.kind === 'bill' && it.bill ? `
       <div class="bill-edit fig">
         <label>amount $<input data-edit="amount" type="number" step="0.01" value="${it.bill.amount != null ? it.bill.amount : ''}" placeholder="?"></label>
-        <label>due day <input data-edit="dueDay" type="number" min="1" max="31" value="${it.bill.dueDay || ''}" placeholder="?"></label>
+        <label>how often <select data-edit="cadence">
+          ${Object.keys(NB.CADENCE).map((c) => `<option value="${c}"${c === NB.billCadence(it) ? ' selected' : ''}>${esc(NB.CADENCE[c].label)}</option>`).join('')}
+        </select></label>
+        ${NB.billCadence(it) === 'monthly' && !it.bill.anchor
+          ? `<label>due day <input data-edit="dueDay" type="number" min="1" max="31" value="${it.bill.dueDay || ''}" placeholder="?"></label>`
+          : `<label>next due <input data-edit="anchor" type="date" value="${esc(it.bill.anchor || '')}"></label>`}
         <label class="autolabel"><input data-edit="autopay" type="checkbox" ${it.bill.autopay ? 'checked' : ''}> autopay</label>
       </div>` : '';
-    const bdayBits = it.kind === 'person' && it.person ? `
-      <div class="bill-edit fig"><label>birthday (MM-DD) <input data-edit="birthday" value="${esc(it.person.birthday || '')}" placeholder="03-14"></label></div>` : '';
     const renewalBits = it.kind === 'renewal' && it.renewal ? `
       <div class="bill-edit fig"><label>expires <input data-edit="expires" type="date" value="${esc(it.renewal.expires || '')}"></label></div>` : '';
     return `
     <div class="detail">
       ${receipt}
       <div class="edit-line"><input class="edit-text hand" data-edit="text" value="${esc(it.text)}" aria-label="Edit text"></div>
-      ${billBits}${bdayBits}${renewalBits}
+      ${billBits}${renewalBits}
       ${when}
       <div class="detail-acts fig">
         <button type="button" class="linky" data-act="toss">toss</button>
@@ -1393,10 +1522,10 @@ Rules, non-negotiable:
 
   function echoHTML(e) {
     const it = e.item;
-    const cls = { bill: 'e-bill', bday: 'e-bday', renewal: 'e-renewal', health: 'e-health' }[e.echo];
+    const cls = { bill: 'e-bill', renewal: 'e-renewal', health: 'e-health' }[e.echo];
     const tick = e.echo === 'bill' ? `<button class="tick small" data-act="paybill" type="button" aria-label="mark paid"></button>`
       : e.echo === 'health' ? `<button class="tick small" data-act="tick" type="button"></button>` : '';
-    const label = e.echo === 'bday' ? `☼ ${esc(it.text)}` : esc(it.text);
+    const label = esc(it.text);
     const amt = it.bill && it.bill.amount != null ? `<span class="fig e-amt">· $${NB.fmtAmt(it.bill.amount)}</span>` : '';
     const auto = it.bill && it.bill.autopay ? `<span class="autotag fig">auto</span>` : '';
     return `<div class="echo ${cls}" data-id="${it.id}">${tick}<span class="hand e-text" data-act="goback">${label}</span>${amt}${auto}<span class="dogear" title="lives in the Back Pages" data-act="goback"></span></div>`;
@@ -1477,35 +1606,39 @@ Rules, non-negotiable:
 
   /* ---------------- back pages ---------------- */
   const BACK_TABS = [
-    { id: 'bills', label: 'Bills' }, { id: 'people', label: 'People' }, { id: 'renewals', label: 'Renewals' },
+    { id: 'bills', label: 'Bills' }, { id: 'renewals', label: 'Renewals' },
     { id: 'owed', label: 'Owed' }, { id: 'health', label: 'Health' },
   ];
   function backView() {
     const sub = BACK_TABS.map((b) => `<button type="button" class="bthumb b-${b.id} ${backTab === b.id ? 'on' : ''}" data-backtab="${b.id}">${b.label}</button>`).join('');
-    const body = { bills: billsPage, people: peoplePage, renewals: renewalsPage, owed: owedPage, health: healthPage }[backTab]();
+    const body = { bills: billsPage, renewals: renewalsPage, owed: owedPage, health: healthPage }[backTab]();
     return `<div class="backwrap"><div class="bthumbs">${sub}</div><div class="backpage bp-${backTab}">${body}</div></div>`;
   }
 
   function billsPage() {
-    const cyc = NB.billCycleKey();
     const bills = NB.itemsFor((i) => i.kind === 'bill' && i.bill);
     const withAmt = bills.filter((b) => b.bill.amount != null);
-    const total = withAmt.reduce((s, b) => s + b.bill.amount, 0);
-    const paid = withAmt.filter((b) => NB.billPaid(b, cyc)).reduce((s, b) => s + b.bill.amount, 0);
+    /* a fortnightly bill lands twice in most months — count the hits, don't assume one */
+    const thisMonth = D.monthKey(D.todayKey());
+    const sums = withAmt.map((b) => ({ b, m: NB.billMonthTotals(b, thisMonth) }));
+    const total = sums.reduce((s, x) => s + x.m.due, 0);
+    const paid = sums.reduce((s, x) => s + x.m.paid, 0);
     const coming = total - paid;
-    const needsHand = withAmt.filter((b) => !NB.billPaid(b, cyc) && !b.bill.autopay).reduce((s, b) => s + b.bill.amount, 0);
+    const needsHand = sums.filter((x) => !x.b.bill.autopay).reduce((s, x) => s + x.m.unpaid, 0);
     const auto = coming - needsHand;
     const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
-    const unpaid = bills.filter((b) => !NB.billPaid(b, cyc));
-    const next = unpaid.filter((b) => b.bill.dueDay).sort((a, b) => D.daysUntil(NB.billDueDate(a)) - D.daysUntil(NB.billDueDate(b)))[0];
-    const paidRows = bills.filter((b) => NB.billPaid(b, cyc));
+    const unpaid = bills.filter((b) => !NB.billPaid(b));
+    const next = unpaid.filter((b) => NB.billDueDate(b)).sort((a, b) => D.daysUntil(NB.billDueDate(a)) - D.daysUntil(NB.billDueDate(b)))[0];
+    const paidRows = bills.filter((b) => NB.billPaid(b));
 
     const row = (b) => {
-      const due = b.bill.dueDay ? NB.billDueDate(b) : null;
+      const due = NB.billDueDate(b);
       const du = due ? D.daysUntil(due) : null;
       const open = expandedId === b.id;
       const amber = du != null && du <= 0 ? 'due-now' : du != null && du <= 3 ? 'due-soon' : '';
       const dueTxt = due ? (du < 0 ? `was due ${esc(D.dayName(due, true))} — still open` : du === 0 ? 'due today' : `${esc(D.dayName(due, true))} ${Number(due.slice(8))}`) : '—';
+      /* "every month" on every line is noise — only name the unusual rhythms */
+      const cad = NB.billCadence(b) === 'monthly' ? '' : NB.cadenceLabel(b);
       return `
       <div class="brow ${amber} ${b.bill.autopay ? 'is-auto' : ''} ${!b.ink ? 'pencil' : ''}" data-id="${b.id}">
         <div class="row-main">
@@ -1514,7 +1647,7 @@ Rules, non-negotiable:
           <span class="row-text hand" data-act="open">${esc(b.text)}${b.bill.autopay ? '<span class="autotag fig">AUTOPAY</span>' : ''}${b.sample ? '<span class="sampletag">sample</span>' : ''}</span>
           <span class="bamt fig ${b.bill.estimated ? 'est' : ''}">${b.bill.amount != null ? (b.bill.estimated ? '~' : '') + '$' + NB.fmtAmt(b.bill.amount) : '$?'}</span>
         </div>
-        ${due ? `<div class="bmeta"><span class="bwhen fig">${dueTxt}</span></div>` : ''}
+        ${due || cad ? `<div class="bmeta"><span class="bwhen fig">${due ? dueTxt : ''}</span>${cad ? `<span class="bevery fig">${esc(cad)}</span>` : ''}</div>` : ''}
         ${b.question ? stickyHTML(b) : ''}
         ${open ? detailHTML(b) : ''}
       </div>`;
@@ -1533,41 +1666,17 @@ Rules, non-negotiable:
         ${next ? `<div class="nextup hand">Next up: ${esc(next.text.toLowerCase())}, ${esc(D.dayName(NB.billDueDate(next)))}.</div>` : ''}
       </div>
       <div class="band-label fig">still coming</div>
-      <div class="rows">${unpaid.sort((a, b) => (a.bill.dueDay || 99) - (b.bill.dueDay || 99)).map(row).join('') || emptyLine('No bills on the ledger. Either you\'re very lucky, or they\'re hiding — jot one below.')}</div>
+      <div class="rows">${unpaid.sort((a, b) => (NB.billDueDate(a) || '9').localeCompare(NB.billDueDate(b) || '9')).map(row).join('') || emptyLine('No bills on the ledger. Either you\'re very lucky, or they\'re hiding — jot one below.')}</div>
       ${paidRows.length ? `<div class="band-label fig" style="margin-top:14px">handled</div><div class="rows handled">${paidRows.map(row).join('')}</div>` : ''}
       <form class="addform fig" data-form="bill">
         <input name="name" placeholder="add a bill — name" required>
         <input name="amount" type="number" step="0.01" placeholder="$">
-        <input name="day" type="number" min="1" max="31" placeholder="day">
+        <select name="cadence" aria-label="how often">
+          ${Object.keys(NB.CADENCE).map((c) => `<option value="${c}"${c === 'monthly' ? ' selected' : ''}>${esc(NB.CADENCE[c].label)}</option>`).join('')}
+        </select>
+        <input name="first" type="date" aria-label="first due date">
         <label class="autolabel"><input name="autopay" type="checkbox"> auto</label>
         <button type="submit" class="chip">rule the line</button>
-      </form>
-    `;
-  }
-
-  function peoplePage() {
-    const people = NB.itemsFor((i) => i.kind === 'person');
-    const row = (p) => {
-      const bd = p.person && p.person.birthday;
-      const du = bd ? NB.bdayDaysAway(bd) : null;
-      return `
-      <div class="brow ${!p.ink ? 'pencil' : ''}" data-id="${p.id}">
-        <div class="row-main">
-          <span class="monogram hand">${esc((p.text || '?')[0].toUpperCase())}</span>
-          <span class="row-text hand" data-act="open">${esc(p.text)}</span>
-          <span class="bwhen fig">${bd ? (du === 0 ? '☼ today' : `in ${du} day${du === 1 ? '' : 's'}`) : '—'}</span>
-        </div>
-        ${p.question ? stickyHTML(p) : ''}
-        ${expandedId === p.id ? detailHTML(p) : ''}
-      </div>`;
-    };
-    return `
-      ${pageTitle('People & Birthdays', 'everyone you\'d hate to forget')}
-      <div class="rows">${people.sort((a, b) => (a.person && a.person.birthday ? NB.bdayDaysAway(a.person.birthday) : 999) - (b.person && b.person.birthday ? NB.bdayDaysAway(b.person.birthday) : 999)).map(row).join('') || emptyLine('Nobody back here yet. Mention a human in a dump and I\'ll start a card.')}</div>
-      <form class="addform fig" data-form="person">
-        <input name="name" placeholder="add someone — name" required>
-        <input name="bday" placeholder="MM-DD">
-        <button type="submit" class="chip">add</button>
       </form>
     `;
   }
@@ -1699,7 +1808,7 @@ Rules, non-negotiable:
     /* overlay was closed mid-sort — still land the items, just re-render the page */
     if (!document.querySelector('#sort-stage')) { closeOverlay(); render(); return; }
 
-    const tabOf = (it) => it.kind === 'bill' ? 'Bills' : it.kind === 'person' ? 'People' : it.kind === 'renewal' ? 'Renewals' : it.kind === 'debt' ? 'Owed' : it.kind === 'health' ? 'Health' : it.kind === 'goal' ? 'Goals' : it.kind === 'idea' ? 'Ideas' : it.date ? D.dayName(it.date, true) : 'This week';
+    const tabOf = (it) => it.kind === 'bill' ? 'Bills' : it.kind === 'renewal' ? 'Renewals' : it.kind === 'debt' ? 'Owed' : it.kind === 'health' ? 'Health' : it.kind === 'goal' ? 'Goals' : it.kind === 'idea' ? 'Ideas' : it.date ? D.dayName(it.date, true) : 'This week';
     stage.innerHTML = `
       <div class="sorted">
         ${result.filed.map((it, i) => `<div class="sorted-row" style="animation-delay:${i * 120}ms"><span class="hand">${esc(it.text)}</span><span class="fig sorted-tab">→ ${esc(tabOf(it))}</span></div>`).join('')}
@@ -1806,7 +1915,7 @@ Rules, non-negotiable:
   }
 
   function payBill(it) {
-    const cyc = NB.billCycleKey();
+    const cyc = NB.billCycleKey(it);
     const paid = NB.billPaid(it, cyc);
     NB.withUndo(paid ? 'Un-paid. Bills do come back.' : `Paid. ${it.text} and I have no further business this month.`, () => {
       it.bill.paid = it.bill.paid || {};
@@ -1907,8 +2016,23 @@ Rules, non-negotiable:
       if (f === 'text') { it.text = ed.value.trim() || it.text; if (it.source) it.source.edited = true; }
       if (f === 'amount' && it.bill) { it.bill.amount = ed.value === '' ? null : Number(ed.value); it.bill.estimated = false; it.ink = true; }
       if (f === 'dueDay' && it.bill) { it.bill.dueDay = ed.value === '' ? null : Math.max(1, Math.min(31, Number(ed.value))); }
+      if (f === 'anchor' && it.bill) { it.bill.anchor = /^\d{4}-\d{2}-\d{2}$/.test(ed.value) ? ed.value : null; it.ink = true; it.question = null; }
+      if (f === 'cadence' && it.bill) {
+        /* read the next due date while the OLD rhythm still applies, so changing
+           the rhythm keeps the date instead of resetting it to today */
+        const wasDue = NB.billDueDate(it);
+        it.bill.cadence = NB.CADENCE[ed.value] ? ed.value : 'monthly';
+        if (it.bill.cadence === 'monthly') {
+          it.bill.anchor = null;
+          if (wasDue) it.bill.dueDay = Number(wasDue.slice(8));
+        } else {
+          it.bill.anchor = wasDue || D.todayKey();
+        }
+        /* a cycle means something different now, so the old paid keys don't line up */
+        it.bill.paid = {};
+        it.ink = true;
+      }
       if (f === 'autopay' && it.bill) { it.bill.autopay = ed.checked; }
-      if (f === 'birthday' && it.person) { it.person.birthday = /^\d{2}-\d{2}$/.test(ed.value) ? ed.value : it.person.birthday; it.ink = true; it.question = null; }
       if (f === 'expires' && it.renewal) { it.renewal.expires = ed.value || null; it.ink = true; it.question = null; }
       NB.save();
       if (f !== 'text') render();   /* don't tear down the DOM while the text field has focus */
@@ -1954,8 +2078,18 @@ Rules, non-negotiable:
     const fd = new FormData(form);
     const src = { quote: '', at: new Date().toISOString(), via: 'manual' };
     NB.withUndo('One down. Got more? I\'ll rule the lines.', () => {
-      if (kind === 'bill') NB.addItem({ kind: 'bill', text: fd.get('name'), source: src, bill: { amount: fd.get('amount') ? Number(fd.get('amount')) : null, estimated: !fd.get('amount'), dueDay: fd.get('day') ? Number(fd.get('day')) : null, autopay: !!fd.get('autopay'), cadence: 'monthly', paid: {} } });
-      if (kind === 'person') NB.addItem({ kind: 'person', text: fd.get('name'), source: src, person: { birthday: /^\d{2}-\d{2}$/.test(fd.get('bday') || '') ? fd.get('bday') : null, notes: [] } });
+      if (kind === 'bill') {
+        const cad = NB.CADENCE[fd.get('cadence')] ? fd.get('cadence') : 'monthly';
+        const first = /^\d{4}-\d{2}-\d{2}$/.test(fd.get('first') || '') ? fd.get('first') : null;
+        /* monthly keeps a plain day-of-month; every other rhythm counts from a date */
+        const plain = cad === 'monthly';
+        NB.addItem({ kind: 'bill', text: fd.get('name'), source: src, bill: {
+          amount: fd.get('amount') ? Number(fd.get('amount')) : null, estimated: !fd.get('amount'),
+          dueDay: plain && first ? Number(first.slice(8)) : null,
+          anchor: plain ? null : first,
+          autopay: !!fd.get('autopay'), cadence: cad, paid: {},
+        } });
+      }
       if (kind === 'renewal') NB.addItem({ kind: 'renewal', text: fd.get('name'), source: src, renewal: { expires: fd.get('date') || null } });
       if (kind === 'debt') {
         const what = fd.get('what') || '';
