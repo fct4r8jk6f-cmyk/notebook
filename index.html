@@ -554,8 +554,8 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   const DEFAULT_STATE = () => ({
     v: 1,
     items: [],
-    settings: { theme: 'auto', plainHand: false, apiKey: '', model: DEFAULT_MODEL },
-    meta: { lastOpen: null, seeded: false, firstDumpDone: false, briefFoldedFor: null },
+    settings: { theme: 'auto', plainHand: false, apiKey: '', model: DEFAULT_MODEL, gistToken: '' },
+    meta: { lastOpen: null, seeded: false, firstDumpDone: false, briefFoldedFor: null, gistId: null, syncedAt: null, graves: {} },
   });
 
   let state = load();
@@ -599,9 +599,32 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
       return DEFAULT_STATE();
     }
   }
+  /* Every item carries `touched` so two devices can be merged item by item
+     instead of one notebook flattening the other. Stamped here, centrally, by
+     diffing against the last write — call sites don't have to remember. */
+  function fingerprint(items) {
+    const m = {};
+    for (const it of items) m[it.id] = JSON.stringify({ ...it, touched: undefined });
+    return m;
+  }
+  let lastWrite = fingerprint(state.items);
+  function stampChanges() {
+    const now = new Date().toISOString();
+    let dirty = false;
+    for (const it of state.items) {
+      const print = JSON.stringify({ ...it, touched: undefined });
+      if (lastWrite[it.id] !== print) { it.touched = now; dirty = true; }
+    }
+    if (Object.keys(lastWrite).length !== state.items.length) dirty = true;
+    lastWrite = fingerprint(state.items);
+    return dirty;
+  }
+
   function flush() {
+    const dirty = stampChanges();
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); NB.storageError = false; }
     catch (e) { NB.storageError = true; if (NB.onStorageError) NB.onStorageError(); }
+    if (dirty && !applyingSync) queueSync();
   }
   function save() { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 150); }
   NB.flush = () => { clearTimeout(saveTimer); flush(); };
@@ -631,7 +654,12 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
 
   function addItem(partial) { const it = makeItem(partial); state.items.push(it); save(); return it; }
   function getItem(id) { return state.items.find((i) => i.id === id) || null; }
-  function removeItem(id) { state.items = state.items.filter((i) => i.id !== id); save(); }
+  function removeItem(id) {
+    state.items = state.items.filter((i) => i.id !== id);
+    state.meta.graves = state.meta.graves || {};
+    state.meta.graves[id] = new Date().toISOString();
+    save();
+  }
   NB.addItem = addItem; NB.getItem = getItem; NB.removeItem = removeItem;
 
   /* Clear watermark samples the moment real life arrives. */
@@ -646,14 +674,18 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   /* ---------------- undo (6s whisper) ---------------- */
   let undoSnap = null;
   function withUndo(label, fn) {
-    undoSnap = JSON.stringify(state.items);
+    /* graves too — undoing a toss must not leave the headstone behind, or the
+       item comes back on this device and sync buries it again */
+    undoSnap = JSON.stringify({ items: state.items, graves: state.meta.graves || {} });
     fn();
     save();
     if (NB.onWhisper) NB.onWhisper(label);
   }
   function undo() {
     if (!undoSnap) return false;
-    state.items = JSON.parse(undoSnap);
+    const snap = JSON.parse(undoSnap);
+    state.items = snap.items;
+    state.meta.graves = snap.graves || {};
     undoSnap = null; save();
     return true;
   }
@@ -814,6 +846,126 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   NB.billCycleKey = billCycleKey; NB.billPaid = billPaid; NB.billDueDate = billDueDate;
   NB.billHitsInMonth = billHitsInMonth; NB.billCadence = billCadence; NB.cadenceLabel = cadenceLabel;
   NB.billMonthTotals = billMonthTotals; NB.billOccurrencesInMonth = billOccurrencesInMonth;
+
+  /* ---- sync: the same notebook on every device, without a server ----------
+     The whole book is one JSON blob in a private GitHub Gist. The token lives
+     on this device only — same deal as the Claude key: never exported, never
+     sent anywhere but GitHub. Offline is unaffected; syncing is something that
+     happens when there's a signal, never something you wait for.
+
+     Merges are per item, not per notebook, so a note written on the phone and
+     a note written on the laptop both survive. A toss leaves a grave, so a
+     tossed item doesn't wander back from the other device. */
+  const GIST_FILE = 'notebook.json';
+  const GRAVE_DAYS = 90;
+  let syncTimer = null, syncing = false, applyingSync = false;
+
+  function setSync(status, detail) {
+    NB.sync = { status, detail: detail || '', at: state.meta.syncedAt || null };
+    if (NB.onSync) NB.onSync(NB.sync);
+  }
+  NB.sync = { status: 'off', detail: '', at: null };
+
+  function pruneGraves(graves) {
+    const cutoff = new Date(Date.now() - GRAVE_DAYS * DAY).toISOString();
+    const out = {};
+    for (const id in graves) if (graves[id] > cutoff) out[id] = graves[id];
+    return out;
+  }
+
+  /* Newer side wins per item; a grave newer than the item buries it. */
+  function mergeBooks(mine, theirs) {
+    const graves = {};
+    for (const src of [theirs.graves || {}, mine.graves || {}]) {
+      for (const id in src) if (!graves[id] || src[id] > graves[id]) graves[id] = src[id];
+    }
+    const by = {};
+    for (const it of theirs.items || []) by[it.id] = it;
+    for (const it of mine.items || []) {
+      const other = by[it.id];
+      by[it.id] = !other || (it.touched || '') >= (other.touched || '') ? it : other;
+    }
+    let items = Object.values(by).filter((it) => {
+      const g = graves[it.id];
+      return !g || (it.touched || '') > g;
+    });
+    /* a real notebook beats the other device's watermark seeds */
+    if (items.some((i) => !i.sample)) items = items.filter((i) => !i.sample);
+    return { items, graves: pruneGraves(graves) };
+  }
+  NB.mergeBooks = mergeBooks;
+
+  async function gh(path, opts) {
+    const res = await fetch('https://api.github.com' + path, {
+      ...opts,
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${state.settings.gistToken}`,
+        'content-type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 401) throw new Error('GitHub turned that token away.');
+      if (res.status === 403) throw new Error('That token can\'t reach gists — it needs the gist scope.');
+      if (res.status === 404) throw new Error('That notebook has gone from GitHub.');
+      throw new Error((err && err.message) || `GitHub said ${res.status}.`);
+    }
+    return res.json();
+  }
+
+  async function syncNow() {
+    if (!state.settings.gistToken) { setSync('off'); return false; }
+    if (syncing) return false;
+    syncing = true; setSync('syncing');
+    try {
+      let theirs = null, theirsRaw = null;
+      if (state.meta.gistId) {
+        const g = await gh('/gists/' + state.meta.gistId);
+        const f = g.files && g.files[GIST_FILE];
+        if (f) {
+          theirsRaw = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+          theirs = JSON.parse(theirsRaw);
+        }
+      }
+      applyingSync = true;
+      const merged = theirs
+        ? mergeBooks({ items: state.items, graves: state.meta.graves }, theirs)
+        : { items: state.items, graves: pruneGraves(state.meta.graves || {}) };
+      state.items = merged.items;
+      state.meta.graves = merged.graves;
+
+      /* only the book travels — settings, keys and tokens stay on the device */
+      const body = JSON.stringify({ items: state.items, graves: state.meta.graves }, null, 1);
+      const files = { files: { [GIST_FILE]: { content: body } } };
+      if (state.meta.gistId) {
+        /* don't write a revision just to say nothing changed */
+        if (theirsRaw !== body) await gh('/gists/' + state.meta.gistId, { method: 'PATCH', body: JSON.stringify(files) });
+      } else {
+        const g = await gh('/gists', { method: 'POST', body: JSON.stringify({ ...files, public: false, description: 'My Notebook' }) });
+        state.meta.gistId = g.id;
+      }
+      state.meta.syncedAt = new Date().toISOString();
+      stampChanges(); flush();
+      applyingSync = false;
+      setSync('ok');
+      return true;
+    } catch (e) {
+      applyingSync = false;
+      setSync('error', e.message);
+      return false;
+    } finally {
+      syncing = false;
+    }
+  }
+  NB.syncNow = syncNow;
+
+  function queueSync() {
+    if (!state.settings.gistToken) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncNow, 2500);   /* let a burst of edits settle first */
+  }
+  NB.queueSync = queueSync;
 
   function itemsFor(pred) { return state.items.filter(pred); }
   NB.itemsFor = itemsFor;
@@ -1357,7 +1509,7 @@ Rules, non-negotiable:
 
   /* ---------------- export / import ---------------- */
   /* Export never carries the API key — it stays on this device. */
-  NB.exportJSON = () => JSON.stringify({ ...state, settings: { ...state.settings, apiKey: '' } }, null, 2);
+  NB.exportJSON = () => JSON.stringify({ ...state, settings: { ...state.settings, apiKey: '', gistToken: '' } }, null, 2);
   NB.importJSON = (raw) => {
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.items)) throw new Error('That doesn\'t look like a notebook.');
@@ -1371,7 +1523,7 @@ Rules, non-negotiable:
       }
     });
     const base = DEFAULT_STATE();
-    state = { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings || {}), apiKey: state.settings.apiKey } };
+    state = { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings || {}), apiKey: state.settings.apiKey, gistToken: state.settings.gistToken } };
     undoSnap = null;
     save();
   };
@@ -1920,6 +2072,20 @@ Rules, non-negotiable:
   }
 
   /* ---------------- flyleaf (settings) ---------------- */
+  /* the sync state, said plainly */
+  function syncLine() {
+    const st = NB.sync || { status: 'off' };
+    if (!NB.state().settings.gistToken) return 'Not syncing — no token yet.';
+    if (st.status === 'syncing') return 'Catching up…';
+    if (st.status === 'error') return st.detail || 'Couldn\'t reach GitHub. It\'ll try again.';
+    if (st.at) {
+      const d = new Date(st.at);
+      const mins = Math.round((Date.now() - d.getTime()) / 60000);
+      return mins < 1 ? 'Up to date, just now.' : mins < 60 ? `Up to date, ${mins} min ago.` : `Last synced ${D.niceDate(D.toKey(d))}.`;
+    }
+    return 'Ready to sync.';
+  }
+
   function openSettings() {
     const s = NB.state().settings;
     const ov = $('#overlay');
@@ -1946,6 +2112,14 @@ Rules, non-negotiable:
             </select>
           </label>
           <p class="hint">No key? I still sort with my offline brain — just less cleverly. Keys come from console.anthropic.com; a sort costs about a cent.</p>
+          <label>This notebook, on all my devices <span class="hint">(optional · a GitHub token, stays on this device)</span>
+            <input type="password" data-set="gistToken" value="${esc(s.gistToken || '')}" placeholder="ghp_…">
+          </label>
+          <p class="hint">Make one at github.com/settings/tokens with the <b>gist</b> scope. Your book lives in a private gist only you can read; paste the same token on another device and the two keep each other up to date.</p>
+          <div class="set-acts">
+            <button type="button" class="pbtn" data-act="syncnow">Sync now</button>
+            <span class="synced hint" id="sync-line">${esc(syncLine())}</span>
+          </div>
           <div class="set-acts">
             <button type="button" class="pbtn" data-act="export">Export notebook</button>
             <label class="pbtn filebtn">Import<input type="file" accept=".json" data-act="import" hidden></label>
@@ -2044,6 +2218,11 @@ Rules, non-negotiable:
       }
       return;
     }
+    if (a === 'syncnow') {
+      NB.syncNow().then(() => { const l = $('#sync-line'); if (l) l.textContent = syncLine(); render(); });
+      const l = $('#sync-line'); if (l) l.textContent = 'Catching up…';
+      return;
+    }
     if (a === 'export') {
       const blob = new Blob([NB.exportJSON()], { type: 'application/json' });
       const aEl = document.createElement('a');
@@ -2108,6 +2287,7 @@ Rules, non-negotiable:
       const k = st.dataset.set;
       s[k] = st.type === 'checkbox' ? st.checked : st.value;
       NB.save(); applyTheme();
+      if (k === 'gistToken') { const l = $('#sync-line'); if (l) l.textContent = syncLine(); NB.syncNow().then(() => render()); }
       return;
     }
     const imp = e.target.closest('[data-act="import"]');
@@ -2188,10 +2368,15 @@ Rules, non-negotiable:
 
     /* the day can turn while the app stays open (installed PWAs live for days) */
     NB.onStorageError = () => NB.onWhisper('Out of room on this device — export to be safe.');
+    /* keep the flyleaf's line honest while it's open */
+    NB.onSync = () => { const l = $('#sync-line'); if (l) l.textContent = syncLine(); };
+    /* catch up on open, and again whenever the app comes back to the front */
+    NB.syncNow().then((did) => { if (did) render(); });
     window.addEventListener('pagehide', () => NB.flush && NB.flush());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { NB.flush && NB.flush(); return; }
       if (NB.state().meta.lastOpen !== D.todayKey()) { NB.rollover(); render(); }
+      NB.syncNow().then((did) => { if (did) render(); });
     });
     setInterval(() => {
       if (!document.hidden && NB.state().meta.lastOpen !== D.todayKey()) { NB.rollover(); render(); }

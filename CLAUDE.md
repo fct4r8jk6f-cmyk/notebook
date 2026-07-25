@@ -51,7 +51,7 @@ assigns).
 ### Item model (`makeItem`)
 
 ```
-{ id, kind, text, ink, date, time, bucket, done, doneAt, doneKey, carried, sample,
+{ id, kind, text, ink, date, time, bucket, done, doneAt, doneKey, carried, sample, touched,
   source: {quote, at, via}, question: {q, options:[{label, act}]},
   bill, renewal, debt, goal }
 ```
@@ -62,6 +62,10 @@ assigns).
   them the moment the first real dump lands. Seeds must never survive real use.
 - `question` parks an item as a sticky asking the user something; answering it
   runs an `act` (see `answerQuestion` / `actLabel`).
+- `touched` is an ISO instant stamped centrally in `flush()` by diffing each
+  item against the last write — call sites never set it. It's what lets two
+  devices merge item by item. Don't stamp it by hand, and don't include it in
+  the fingerprint used for the diff or every save re-stamps everything.
 - `doneKey` is the **local** day something was ticked, and it's what the Done
   page groups by. `doneAt` is an ISO instant — don't group by `doneAt.slice(0,10)`,
   that's the UTC day and lands things under the wrong heading after teatime.
@@ -110,6 +114,36 @@ plurals folded to singular and a bonus when the full phrase lands intact. It
 was once `hay.includes(needle)` with the entire question as the needle — so
 "when's rent due?" only matched an item literally containing that sentence, and
 the keyless Desk answered "nothing in the book" to nearly everything.
+
+## Sync
+
+The same notebook on every device, with no server: the whole book is one JSON
+blob in a **private GitHub Gist**. `settings.gistToken` is a GitHub token with
+the `gist` scope, held on the device exactly like `apiKey` — stripped from
+`exportJSON()`, preserved on import, and never written into the gist.
+
+**Only the book travels.** The gist body is `{ items, graves }` and nothing
+else: settings, both tokens and the theme stay local. Don't widen that payload
+without a reason — it's what keeps the keys on the device.
+
+`mergeBooks(mine, theirs)` merges **per item**, not per notebook, so a note
+written on the phone and one written on the laptop both survive. Conflicts on
+the same `id` go to the higher `touched`. Deleting records a headstone in
+`meta.graves[id]`; an item is buried when its grave is newer than its `touched`,
+and revived when it was edited after the delete. Graves are pruned after 90
+days. `withUndo` snapshots graves alongside items — undoing a toss has to
+unwind the headstone too, or sync re-buries the item.
+
+Sync runs on boot, when the app comes back to the front, and 2.5s after an edit
+settles (`queueSync`). It is never blocking and never fatal: offline just sets
+`NB.sync.status = 'error'` and the notebook carries on. `applyingSync` guards
+the write-back so applying a merge doesn't queue another sync. A `PATCH` is
+skipped when the merged body matches what was pulled, so idle devices don't
+pile up gist revisions.
+
+The gist is private, but it is not encrypted — the trust model is the same as
+any private repo. Adding a passphrase would mean losing the notebook if it were
+forgotten, so it's deliberately not there.
 
 ## Bill rhythms
 
