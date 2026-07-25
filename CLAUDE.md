@@ -13,6 +13,12 @@ served as one file. Do not introduce a toolchain, a framework, or extra files
 unless explicitly asked — the whole point is that it's one file you can email to
 yourself and open anywhere.
 
+`sw.js` is the sole exception, and it is a forced one: a service worker cannot
+be registered from a `blob:` or `data:` URL, so caching the shell for offline
+use costs exactly one extra file. `index.html` still runs standalone —
+registration is wrapped in a `try`/`catch` and skipped on `file:`. Don't add a
+third file without the same kind of reason.
+
 To run it: open `index.html` in a browser. That's the whole dev loop.
 
 ## Layout of the file
@@ -63,6 +69,13 @@ assigns).
 ## The two brains
 
 `extract(text)` is the entry point. It picks:
+
+The model is chosen in the flyleaf from `MODELS` (Opus 5 default, Sonnet 5,
+Haiku 4.5); `DEFAULT_MODEL` is the head of that list. **These models think by
+default and `max_tokens` caps thinking *and* the reply together** — that's why
+extraction asks for 8000 and the Desk 2000, not the 2000/300 they used before.
+Cutting those budgets truncates mid-JSON or mid-sentence. `migrateSettings()`
+moves notebooks off the superseded default.
 
 1. **`claudeExtract`** — used only when `settings.apiKey` is set. Calls
    `https://api.anthropic.com/v1/messages` directly from the browser with
@@ -193,8 +206,12 @@ completes.
   with any other hover-only affordance.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`
   file, on purpose.
-- No service worker is registered (the `'serviceWorker' in navigator` branch is
-  intentionally inert).
+- `sw.js` caches the app shell, network-first: merging deploys through Pages,
+  and a cache-first worker would serve a stale notebook to someone online. It
+  handles same-origin GET navigations only — never the Anthropic API, since a
+  cached POST reply would be a stale sort. The page has no other network
+  dependency (fonts are base64, icons are data URIs, the manifest is a blob),
+  so the shell is the whole cache.
 - Share-target text arrives as `?title=&text=&url=` query params at boot and
   opens the dump prefilled; `history.replaceState` clears it.
 

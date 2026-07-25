@@ -541,10 +541,20 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   /* ---------------- store ---------------- */
   const STORE_KEY = 'notebook-v1';
 
+  /* The librarian's brain. Opus 5 is the default; the others are here for
+     people who'd rather trade a little judgement for speed or cost. */
+  const MODELS = [
+    { id: 'claude-opus-5', label: 'Opus 5 — sharpest', note: 'best at messy dumps' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5 — quicker', note: 'nearly as good, cheaper' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — fastest', note: 'plainest, cheapest' },
+  ];
+  const DEFAULT_MODEL = MODELS[0].id;
+  NB.MODELS = MODELS;
+
   const DEFAULT_STATE = () => ({
     v: 1,
     items: [],
-    settings: { theme: 'auto', plainHand: false, apiKey: '', model: 'claude-opus-4-8' },
+    settings: { theme: 'auto', plainHand: false, apiKey: '', model: DEFAULT_MODEL },
     meta: { lastOpen: null, seeded: false, firstDumpDone: false, briefFoldedFor: null },
   });
 
@@ -554,6 +564,14 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
   /* Carry old notebooks forward. The People page is gone; anything filed there
      becomes a loose page in Ideas rather than sitting in storage with nowhere
      to show — the user can read it and toss it. Nothing is deleted on load. */
+  /* The model was never pickable, so anything stored is just the old default —
+     move it forward rather than stranding notebooks on a superseded model. */
+  function migrateSettings(st) {
+    if (!st) return st;
+    if (!st.model || st.model === 'claude-opus-4-8') st.model = DEFAULT_MODEL;
+    return st;
+  }
+
   function migrate(items) {
     return items.map((it) => {
       if (it.kind !== 'person') return it;
@@ -572,7 +590,7 @@ body.plain-hand .hand, body.plain-hand .pagetitle, body.plain-hand .sheet-title 
       const base = DEFAULT_STATE();
       return {
         ...base, ...parsed,
-        settings: { ...base.settings, ...(parsed.settings || {}) },
+        settings: migrateSettings({ ...base.settings, ...(parsed.settings || {}) }),
         meta: { ...base.meta, ...(parsed.meta || {}) },
         items: migrate(Array.isArray(parsed.items) ? parsed.items : []),
       };
@@ -1055,8 +1073,10 @@ Rules, non-negotiable:
   async function claudeExtract(text) {
     const key = state.settings.apiKey;
     const body = {
-      model: state.settings.model || 'claude-opus-4-8',
-      max_tokens: 2000,
+      model: state.settings.model || DEFAULT_MODEL,
+      /* headroom: these models think by default, and max_tokens caps thinking
+         AND the reply together — too tight a budget truncates the JSON. */
+      max_tokens: 8000,
       output_config: { effort: 'low', format: { type: 'json_schema', schema: EXTRACT_SCHEMA } },
       system: EXTRACT_SYSTEM(todayKey()),
       messages: [{ role: 'user', content: text.slice(0, 8000) }],
@@ -1309,8 +1329,8 @@ Rules, non-negotiable:
       };
     }
     const body = {
-      model: state.settings.model || 'claude-opus-4-8',
-      max_tokens: 300,
+      model: state.settings.model || DEFAULT_MODEL,
+      max_tokens: 2000,   /* thinking shares this budget — 300 truncated the reply */
       system: `You are the librarian of the user's personal notebook — sharp, dry, warm underneath. Answer in AT MOST two short sentences, first person. Wit lands on things, never the user; go plain and kind on health, money stress, or anything missed. Today is ${todayKey()} (${dayName(todayKey())}). Answer ONLY from the notebook JSON below; if it isn't in the book, say so plainly. Never invent dates or amounts.\n\nNOTEBOOK: ${notebookDigest()}`,
       messages: [{ role: 'user', content: question.slice(0, 500) }],
     };
@@ -1920,6 +1940,11 @@ Rules, non-negotiable:
           <label>Librarian's brain — Claude API key <span class="hint">(optional · stays on this device only)</span>
             <input type="password" data-set="apiKey" value="${esc(s.apiKey)}" placeholder="sk-ant-…">
           </label>
+          <label>Which brain <span class="hint">(only matters with a key)</span>
+            <select data-set="model">
+              ${NB.MODELS.map((m) => `<option value="${m.id}"${m.id === (s.model || '') ? ' selected' : ''}>${esc(m.label)} · ${esc(m.note)}</option>`).join('')}
+            </select>
+          </label>
           <p class="hint">No key? I still sort with my offline brain — just less cleverly. Keys come from console.anthropic.com; a sort costs about a cent.</p>
           <div class="set-acts">
             <button type="button" class="pbtn" data-act="export">Export notebook</button>
@@ -2172,8 +2197,14 @@ Rules, non-negotiable:
       if (!document.hidden && NB.state().meta.lastOpen !== D.todayKey()) { NB.rollover(); render(); }
     }, 60000);
 
+    /* Cache the shell so an installed notebook opens without a signal. The one
+       thing that can't live in this file (see sw.js). Relative path so it works
+       from a Pages subpath; failure is silent — opened as a bare file, or from
+       a browser that says no, the app just runs without the offline shell. */
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      Promise.reject().catch(() => {});
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
     }
   }
   boot();
