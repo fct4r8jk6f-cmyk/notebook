@@ -27,7 +27,7 @@ To run it: open `index.html` in a browser. That's the whole dev loop.
 | --- | --- |
 | 1–15 | `<head>`, PWA meta, base64 SVG icons |
 | 16–~430 | `<style>` — the entire visual system |
-| ~430–465 | `<body>` markup — header (brand, ask, settings, Add), `#page`, `#tabs`, `#overlay`, `#whisper` |
+| ~430–500 | `<body>` markup — header (brand, ask, settings, Add), `#page`, `#tabs`, `#overlay`, `#whisper` |
 | ~468–1180 | `<script>` **core.js** — store, item model, the two brains, the brief |
 | ~1180–1960 | `<script>` **ui.js** — rendering, views, overlays, event wiring, `boot()` |
 | tail | runtime-generated web app manifest (so Android offers a real install) |
@@ -51,12 +51,12 @@ assigns).
 ### Item model (`makeItem`)
 
 ```
-{ id, kind, text, ink, date, time, bucket, done, doneAt, doneKey, carried, sample, touched,
+{ id, kind, text, ink, date, time, bucket, done, doneAt, doneKey, carried, touched,
   source: {quote, at, via}, question: {q, options:[{label, act}]},
-  bill, renewal, debt, goal }
+  bill, renewal, debt, goal, event }
 ```
 
-- **kinds**: `task · bill · goal · idea · renewal · debt · health · routine · scrap`
+- **kinds**: `task · bill · goal · idea · renewal · debt · health · routine · scrap · event`
 - **bucket**: `day | week | next-week | someday | goals | ideas`
 - **There are no samples.** `seed()`, `clearSamples()`, the `sample` field, the
   `sampletag` markup and the `meta.seeded` / `meta.firstDumpDone` flags are all
@@ -120,7 +120,17 @@ branch used to require a word from `BILL_WORDS`/`PAY_WORDS`, so
 "due") now opens the branch on its own, and it's the reason `parseAmount` is
 allowed to trust a bare number there.
 
+**Nothing you write may be silently dropped.** The offline brain used to stop at
+`segs.slice(0, 12)` and `items.length >= 6`, so a twelve-line brain-dump lost
+everything after the sixth thing — at the app's main entrance. The caps are 60
+segments / 40 items now (and 40 on the Claude path), which exist only to stop a
+pasted document filing a hundred rows. Never lower them back into the range of
+ordinary use.
+
 Segment order in `localExtract` is significant — the first matching branch wins.
+Events and birthdays are read **first**, before money and before to-dos, so
+"mum's birthday, get a cake, 30 quid" is a birthday with an errand attached
+rather than a bill — and because a birthday isn't something you tick off.
 `insurance` is in both `BILL_WORDS` and `RENEWAL_RE`, so the renewal branch
 explicitly stands aside when there's an amount. Debt is read before both, which
 is what keeps `i lent sam 75 due friday` out of Bills.
@@ -128,6 +138,11 @@ is what keeps `i lent sam 75 due friday` out of Bills.
 `I_OWE_RE` vs `THEY_OWE_RE` turn on the name in the middle: `pay me back` is owed
 *to* you, `pay mike back` is owed *by* you. The lookahead excluding `me|us` is
 what separates them — don't collapse it.
+
+`RENEWAL_RE` is built from a `RENEWS` fragment (`renew(?:s|al|ed|ing)?`). It used
+to spell it `renewal?`, which only ever matched "renewa" — so "car insurance
+renews in September", the most natural phrasing there is, matched nothing and
+fell through to the chatter fallback.
 
 The API key is stored in localStorage on the device only, is never sent
 anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
@@ -172,6 +187,20 @@ pile up gist revisions.
 The gist is private, but it is not encrypted — the trust model is the same as
 any private repo. Adding a passphrase would mean losing the notebook if it were
 forgotten, so it's deliberately not there.
+
+## Sharing
+
+Sending someone the link gives them **their own empty notebook**, saved on their
+device. That already worked — the page holds no per-user state, so the URL is
+just the address of the page — but nothing said so, so Settings has a **Share
+the link** action: `navigator.share` where it exists, clipboard otherwise, the
+bare URL as the last resort. It shares `location.origin + location.pathname`
+and never `location.href`: no query, no gist id, no token.
+
+`privacy.js` in the scratchpad is the proof, and it's worth keeping — it opens
+two browser contexts and asserts the second sees an empty book, that neither
+key travels, that writes on one never reach the other, and that the shipped file
+contains nothing key-shaped.
 
 ## Bill rhythms
 
@@ -219,13 +248,50 @@ afterwards) and carries the date across by reading `billDueDate` *before*
 switching. `since` is left alone — it records when you wrote the bill down, not
 what rhythm it's on.
 
+## Events and birthdays
+
+An `event` item is `{on, annual, born}`. A **birthday is just an event that
+ignores the year** — `annual: true` — so there is one kind, one form and one
+editor rather than two of each. `eventFallsOn` compares `MM-DD` for annual ones;
+`eventNext` finds the next occurrence, and returns `null` for a one-off that has
+already passed. Feb 29 in a common year is marked on the 28th rather than
+skipped: a birthday that vanishes three years in four is a bug, not a purist
+point.
+
+`born` is the **birth year, and only when the text actually stated one**.
+`on` always carries some year so date maths works, but that year is usually a
+guess — deriving an age from it reported "mum's birthday is 14 March" as her
+turning 1 the following year. `eventAge` reads `born` alone; `bornFrom()` accepts
+a hand-picked year only when it's in the past.
+
+`ANNUAL_RE` (birthday, bday, was born, anniversary) decides recurrence;
+`EVENT_RE` catches the one-offs — a concert, a wedding, a flight, an exam. You
+don't tick a wedding, which is why events are echoes rather than tasks.
+
 ## Views
 
-Five tabs: `today · week · money · notes · done`. Two of them group what used to
-be scattered across a ten-destination nav:
+Five tabs: `today · calendar · money · notes · done`. Three of them group what
+used to be scattered across a ten-destination nav:
 
+- **Calendar** → Week · Month · Year (`CAL_TABS`, state in `calTab`)
 - **Money** → Bills · Owed · Renewals (`MONEY_TABS`, state in `backTab`)
 - **Notes** → Ideas · Goals · Health (`NOTES_TABS`, state in `notesTab`)
+
+**Week didn't become a sixth tab when Month and Year arrived.** They're three
+zooms of the same thing, so they group. Five is still the ceiling.
+
+The **month** grid is the one place a 7-across layout fits, because a cell holds
+a number and a few 4px dots rather than the day cards the week shows. `dayMarks`
+returns one mark per *kind*, never per item — thirty dots on the 1st is noise,
+and the month is meant to show the shape of the month. No box around each day
+either: 35 outlined cells reads as a spreadsheet. Only today and the open day
+get a shape.
+
+The **year** is twelve rows, not twelve grids — 84 unreadable cells a month is
+exactly the overwhelm a year view should remove. It carries no bar chart: a bar
+scaled to the busiest month drew a single birthday as near-full, which is a
+chart that lies. The count is the honest number and the names are what you came
+for.
 
 Both render through the same `grouped(tabs, current)` helper, which draws a
 horizontal segmented control above the page and looks the sub-page up in `PAGES`.
@@ -364,6 +430,16 @@ completes.
   day recedes with a transparent background and a dashed border instead. Use a
   token, not a fade — and note `getComputedStyle(el).color` never shows an
   ancestor's opacity, so a contrast check that ignores it reads clean.
+- **`appearance: none` in the input reset strips the native checkmark**, so a
+  ticked checkbox looked exactly like an empty one — autopay, "every year" and
+  the settings toggles all read as off however they were set. The checkbox block
+  that draws the state back lives at the *end* of the stylesheet on purpose:
+  `.addform input` has the same specificity, so source order decides, and its
+  11px padding was also forcing the box wider than its own 22px square.
+- The tab bar is `position: sticky; bottom: 0` with a translucent, blurred
+  background, so page content passes under it. `.page` carries bottom padding to
+  clear it — without that the last row of a long page is visible enough to look
+  present and not tappable.
 - `fmtTime` puts the time in the row's own chip, so `stripTime()` takes it back
   out of the label — otherwise every timed row reads "🕕 6pm  gym at 6pm". It's
   only called when `parseWhen` actually found a time, and it keeps the original
@@ -406,6 +482,13 @@ completes.
   navigation, so a theme set at runtime is wiped by the next reload and the
   "dark" screenshots come back light. Seed it into the stored blob and assert on
   `document.documentElement.dataset.theme` before believing a screenshot.
+- **Measure what a thumb lands on, not the element you happen to have.** A
+  checkbox is 22px on purpose and its `<label>` is the target; a coverage check
+  must `scrollIntoView` first, because measuring at whatever offset the page
+  happens to be at is not a claim about reachability.
+- Seed storage **once** (`if (!localStorage.getItem(...))`), not on every
+  navigation, or a reload wipes the notebook the test is trying to prove
+  survives. Same trap as the theme one above.
 - Exercise the real filing path (`NB.fileExtraction`), not `NB.addItem` on raw
   extractor output. `addItem` skips the bill/renewal/debt shaping, and every money
   page filters on those objects — so the pages come up empty and look broken when
