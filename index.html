@@ -198,9 +198,28 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .day .row { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .day .row:last-child { border-bottom: 0; }
 .dayempty { min-height: 2px; }
-/* full width of the day card: an 11px-wide "+" is unhittable with a thumb */
-.addday { display: block; width: 100%; text-align: left; margin-top: 2px; padding: 9px 2px; color: var(--faint); font-size: 14px; line-height: 1.2; opacity: 0; transition: opacity .12s; }
-.day:hover .addday, .addday:focus-visible { opacity: 1; }
+/* the jot line — always there, never hover-revealed. The old per-day "+" was an
+   11px glyph that appeared on :hover, which a phone doesn't have. */
+.jot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.jot input {
+  flex: 1; min-width: 0; height: 40px; padding: 0 12px; font: inherit; font-size: 15px;
+  color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; transition: border-color .12s;
+}
+/* --muted, not --faint: this placeholder is the only thing telling you the
+   line is writable, and --faint on the field clears barely 2.9:1 */
+.jot input::placeholder { color: var(--muted); opacity: 1; }
+.jot input:focus { outline: none; border-color: var(--accent); }
+.jot-go {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; font-size: 17px;
+  color: var(--muted); background: var(--surface); border: 1px solid var(--border);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.jot-go:hover { border-color: var(--accent); color: var(--accent); }
+/* inside a day card the line is tighter, but still a real target */
+.day .jot { margin-top: 8px; gap: 6px; }
+.day .jot input, .day .jot-go { height: 34px; font-size: 14px; }
+.day .jot-go { width: 34px; font-size: 15px; }
 .band { margin-top: 20px; }
 .band-label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
 .later { opacity: .85; }
@@ -383,9 +402,6 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   .chrome { padding-left: 13px; padding-right: 13px; }
   .tab { font-size: 12px; }
   .mfig .n { font-size: 20px; }
-}
-@media (hover: none) {
-  .addday { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -1656,6 +1672,7 @@ Rules, non-negotiable:
         </div>`;
 
     const echoes = d.echoes.map(echoHTML).join('');
+    const nothing = d.timed.length + d.tasks.length + d.carried.length + d.echoes.length === 0;
     return `
       ${pageTitle('Today', esc(D.dayName(t)) )}
       ${brief}
@@ -1665,10 +1682,23 @@ Rules, non-negotiable:
         ${d.tasks.map((i) => rowHTML(i)).join('')}
         ${d.carried.map((i) => rowHTML(i)).join('')}
       </div>
-      ${d.timed.length + d.tasks.length + d.carried.length + d.echoes.length === 0 ? emptyLine('Nothing today. Tap Add and paste whatever\'s on your mind — it gets sorted for you.') : ''}
+      ${nothing ? emptyLine('Nothing on the list yet. Write one below, or tap Add to paste a whole brain-dump and let it sort itself.') : ''}
+      ${jotHTML(t, 'Add to today')}
       ${routines.length ? `<div class="routines"><span class="r-label fig">keeping up</span>${routines.map((r) => `<button type="button" class="rchip hand ${r.done ? 'rdone' : ''}" data-id="${r.id}" data-act="tick">${r.done ? '●' : '○'} ${esc(r.text)}</button>`).join('')}</div>` : ''}
       ${parked.length ? `<div class="tray"><span class="tray-label hand">✎ a quick word?</span>${parked.map((i) => rowHTML(i)).join('')}</div>` : ''}
     `;
+  }
+
+  /* One line to write a to-do straight onto a day. The only way in used to be
+     the Add sheet — fine for a paragraph of brain-dump, far too much ceremony
+     for "milk". The week's `+` used window.prompt, which an installed PWA can
+     refuse outright. Both go through this now. */
+  function jotHTML(date, label) {
+    return `
+    <form class="jot" data-form="jot" data-date="${date}">
+      <input name="text" type="text" autocomplete="off" placeholder="${esc(label)}…" aria-label="${esc(label)}">
+      <button class="jot-go" type="submit" aria-label="add">＋</button>
+    </form>`;
   }
 
   function echoHTML(e) {
@@ -1703,7 +1733,7 @@ Rules, non-negotiable:
       <section class="day ${isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}">
         <header class="dayhead"><span class="dayname fig">${esc(D.dayName(key, true))}</span>${isToday ? '<span class="todaytag fig">today</span>' : ''}<span class="daynum hand">${Number(key.slice(8))}</span></header>
         <div class="rows small">${rows || '<div class="dayempty"></div>'}</div>
-        <button type="button" class="addday fig" data-act="addday" data-date="${key}">+</button>
+        ${jotHTML(key, isToday ? 'Add to today' : `Add to ${D.dayName(key, true)}`)}
       </section>`;
     }).join('');
 
@@ -2164,18 +2194,6 @@ Rules, non-negotiable:
     }
     if (a === 'fold') { NB.state().meta.briefFoldedFor = D.todayKey(); NB.save(); render(); return; }
     if (a === 'unfold') { NB.state().meta.briefFoldedFor = null; NB.save(); render(); return; }
-    if (a === 'addday') {
-      const date = act.dataset.date;
-      const text = window.prompt('Jot it:');
-      if (text && text.trim()) {
-        NB.withUndo('Inked in.', () => {
-          const { time } = NB.parseWhen(text);
-          NB.addItem({ kind: 'task', text: text.trim(), date, time, bucket: 'day', source: { quote: text.trim(), at: new Date().toISOString(), via: 'manual' } });
-        });
-        render();
-      }
-      return;
-    }
     if (a === 'syncnow') {
       NB.syncNow().then(() => { const l = $('#sync-line'); if (l) l.textContent = syncLine(); render(); });
       const l = $('#sync-line'); if (l) l.textContent = 'Catching up…';
@@ -2279,6 +2297,23 @@ Rules, non-negotiable:
     const kind = form.dataset.form;
     const fd = new FormData(form);
     const src = { quote: '', at: new Date().toISOString(), via: 'manual' };
+    if (kind === 'jot') {
+      const text = (fd.get('text') || '').trim();
+      const input = form.querySelector('input[name="text"]');
+      if (!text) { if (input) input.focus(); return; }
+      /* "gym at 6pm" should keep its time; the day comes from the line you
+         typed into, not from anything in the words */
+      const { time } = NB.parseWhen(text);
+      NB.withUndo('On the list.', () => {
+        NB.addItem({ kind: 'task', text, date: form.dataset.date, time, bucket: 'day', source: { quote: text, at: src.at, via: 'jot' } });
+      });
+      render();
+      /* the redraw destroys the field, so put the cursor back on the new one —
+         a list is written a line at a time */
+      const next = document.querySelector(`.jot[data-date="${form.dataset.date}"] input[name="text"]`);
+      if (next) next.focus();
+      return;
+    }
     NB.withUndo('One down. Got more? I\'ll rule the lines.', () => {
       if (kind === 'bill') {
         const cad = NB.CADENCE[fd.get('cadence')] ? fd.get('cadence') : 'monthly';

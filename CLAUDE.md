@@ -302,10 +302,16 @@ completes.
   it sat over the Add button and silently ate its taps — `elementFromPoint`
   returned the ribbon, and nothing on screen showed why. Anything placed top-right
   needs to be *in* `.chrome`, not floated above it.
-- `.addday` (the per-day `+`) reveals on `:hover`, which no touch screen has;
-  the `@media (hover: none)` block keeps it visible. It's also full-width of the
-  day card — an 11px glyph is a target no thumb hits. Watch for the same two
-  traps with any other hover-only affordance.
+- **Writing a to-do is a one-line form, not a dialog.** `jotHTML(date, label)`
+  renders `.jot` on Today and inside every day of the Week; the `jot` branch of
+  the submit delegate files it as a `task` on that date, runs `parseWhen` so
+  "gym at 6pm" keeps its time, then re-focuses the field after the redraw so a
+  list can be written a line at a time. It replaced `.addday`, an 11px `+`
+  revealed on `:hover` (which no touch screen has) that called `window.prompt`
+  — a dialog an installed PWA is allowed to refuse outright. Don't reach for
+  `prompt`/`confirm` anywhere in this app.
+- The jot placeholder uses `--muted`, not `--faint`. It's the only thing telling
+  you the line is writable, and `--faint` on the field clears barely 2.9:1.
 - `.whisper` needs `width: max-content` before its `max-width`. Without it the
   toast stretches the full clamp and one short word wraps oddly mid-phrase.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`
