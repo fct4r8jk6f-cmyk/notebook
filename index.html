@@ -109,7 +109,10 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .ribbon:hover { background: var(--surface-2); color: var(--text); }
 
 /* ---------------- page ---------------- */
-.page { flex: 1; padding: 4px 16px 28px; }
+/* the bottom padding clears the sticky tab bar. Without it the last row of a
+   long page sits under a translucent, blurred bar — visible enough to look
+   present, and not tappable. */
+.page { flex: 1; padding: 4px 16px 40px; }
 .pagehead { margin: 6px 0 16px; }
 .pagetitle { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 0; line-height: 1.2; }
 .pagetitle .underline { display: none; }
@@ -240,6 +243,73 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .day .jot { margin-top: 8px; gap: 6px; }
 .day .jot input, .day .jot-go { height: 34px; font-size: 14px; }
 .day .jot-go { width: 34px; font-size: 15px; }
+/* ---------------- calendar ---------------- */
+.calhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
+.calspan { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+.calnav {
+  width: 40px; height: 40px; border-radius: 10px; font-size: 20px; line-height: 1; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--surface);
+}
+.calnav:hover { border-color: var(--accent); color: var(--accent); }
+.caltoday { margin: -6px 0 12px; }
+
+/* The one place seven across fits: a cell holds a number and a few 4px dots.
+   No box around each day — 35 outlined cells reads as a spreadsheet. The grid
+   is carried by alignment and whitespace; only today and the open day get a
+   shape, because those are the two you need to find. */
+.monthgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin: 0 -2px; }
+.colhead { text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--faint); padding-bottom: 6px; }
+.cell {
+  position: relative; aspect-ratio: 1 / 1; min-height: 40px; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: transparent; border: 1px solid transparent; padding: 0;
+  transition: background .12s, border-color .12s;
+}
+.cell.out { pointer-events: none; }
+.cell:hover { background: var(--surface-2); }
+.cellnum { font-size: 15px; color: var(--text); line-height: 1; }
+.cell.is-past .cellnum { color: var(--muted); }
+.cell.is-today { background: var(--accent-soft); }
+.cell.is-today .cellnum { color: var(--accent); font-weight: 600; }
+.cell.is-open { background: var(--accent); }
+.cell.is-open .cellnum { color: #fff; font-weight: 600; }
+:root[data-theme="night"] .cell.is-open .cellnum { color: #0F1216; }
+.cell.is-open .dot { background: rgba(255, 255, 255, .8); }
+:root[data-theme="night"] .cell.is-open .dot { background: rgba(15, 18, 22, .7); }
+.dots { display: flex; gap: 3px; height: 4px; align-items: center; }
+.dot { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+.dot-event { background: var(--accent); }
+.dot-bill { background: var(--warn); }
+.dot-health { background: var(--muted); }
+.dot-renewal { background: var(--faint); }
+.dot-task { background: var(--text); }
+
+.dayopen { margin-top: 16px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.dayopen-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.dayopen .band-label { margin-bottom: 0; }
+
+/* twelve rows, not twelve grids: 84 unreadable cells a month is exactly the
+   overwhelm a year view is meant to remove */
+.yeargrid { display: flex; flex-direction: column; }
+.ymonth {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 4px 12px;
+  padding: 13px 2px; border-bottom: 1px solid var(--border); text-align: left; width: 100%;
+}
+.ymonth:last-child { border-bottom: 0; }
+.ymonth:hover .yname { color: var(--accent); }
+.yname { font-size: 16px; color: var(--text); }
+.ymonth.is-quiet .yname { color: var(--muted); }
+.ymonth.is-now .yname { color: var(--accent); font-weight: 600; }
+.ycount { font-size: 13px; color: var(--faint); white-space: nowrap; }
+.yevents { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 3px; margin-top: 5px; }
+.yev { font-size: 14px; color: var(--muted); display: flex; gap: 9px; align-items: baseline; }
+.yday { color: var(--faint); min-width: 17px; font-variant-numeric: tabular-nums; }
+.turns { font-size: 12px; color: var(--faint); margin-left: 8px; }
+
+/* a small typographic mark, not an emoji — nothing else in the app uses one */
+.e-glyph { flex: 0 0 auto; font-size: 10px; line-height: 1.9; color: var(--accent); }
+.e-event, .e-birthday { --echo: var(--accent); }
+
 .band { margin-top: 20px; }
 .band-label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
 .later { opacity: .85; }
@@ -298,7 +368,9 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .addform .chip { color: #fff; background: var(--accent); border-radius: 999px; padding: 9px 16px; font-weight: 600; font-size: 15px; }
 :root[data-theme="night"] .addform .chip { color: #0F1216; }
 .autolabel, .lastday { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; color: var(--muted); }
-.autolabel input, .lastday input { width: auto; }
+/* the checkbox keeps the 22px square set in the reset — `width: auto` here used
+   to stretch it across the whole label */
+.autolabel input:not([type="checkbox"]), .lastday input:not([type="checkbox"]) { width: auto; }
 /* it qualifies the date field, so it sits under it on its own line */
 .lastday { flex-basis: 100%; }
 .chip { font-size: 14px; color: var(--text); background: var(--surface-2); border-radius: 999px; padding: 7px 13px; }
@@ -417,6 +489,29 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .undo-btn { font-size: 14px; font-weight: 600; color: inherit; border-bottom: 1px solid currentColor; white-space: nowrap; }
 .undo-bar { width: 38px; height: 3px; border-radius: 999px; background: rgba(127,127,127,.35); overflow: hidden; flex: 0 0 auto; }
 .undo-fill { display: block; height: 100%; width: 100%; background: currentColor; transition: width 6s linear; }
+
+/* ---------------- checkboxes ----------------
+   `appearance: none` in the reset strips the native tick, so a ticked box
+   looked exactly like an empty one — autopay, "every year" and the settings
+   toggles all read as off however they were set. This draws the state back.
+   It lives down here on purpose: `.addform input` has the same specificity, so
+   whichever comes last wins, and its 11px padding was forcing the box wider
+   than the 22px square set on it. */
+input[type="checkbox"] {
+  box-sizing: border-box; width: 22px; height: 22px; flex: 0 0 auto; padding: 0; border-radius: 6px;
+  border: 1.5px solid var(--border-firm); background: var(--surface);
+  display: inline-grid; place-content: center; transition: background .12s, border-color .12s;
+}
+input[type="checkbox"]::before {
+  content: ''; width: 11px; height: 11px; transform: scale(0); transition: transform .12s;
+  background: var(--surface);
+  clip-path: polygon(14% 47%, 0 60%, 39% 100%, 100% 22%, 86% 9%, 39% 73%);
+}
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::before { transform: scale(1); }
+:root[data-theme="night"] input[type="checkbox"]::before { background: #0F1216; }
+/* the whole label is the target, so the 22px box doesn't have to be 32 */
+label:has(> input[type="checkbox"]) { cursor: pointer; min-height: 32px; }
 
 /* ---------------- misc ---------------- */
 @media (max-width: 400px) {
@@ -621,6 +716,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       source: null,            /* {quote, at, via} */
       question: null,          /* {q, options:[{label, act}]} — parked sticky */
       bill: null, renewal: null, debt: null, goal: null,
+      event: null,             /* {on: 'YYYY-MM-DD', annual} — birthdays repeat */
       ...partial,
     };
   }
@@ -958,6 +1054,36 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   function itemsFor(pred) { return state.items.filter(pred); }
   NB.itemsFor = itemsFor;
 
+  /* ---------------- events and birthdays ---------------- */
+  /* A birthday is an event that ignores the year. Storing the year anyway means
+     "Ana turns 8" can be answered later without a second field. */
+  function eventFallsOn(it, key) {
+    const e = it && it.event; if (!e || !e.on) return false;
+    return e.annual ? e.on.slice(5) === key.slice(5) : e.on === key;
+  }
+  /* The next time this event comes round, from `from` onwards. A one-off that
+     has passed returns null — it belongs to history, not to the year ahead. */
+  function eventNext(it, from) {
+    const e = it && it.event; if (!e || !e.on) return null;
+    const ref = from || todayKey();
+    if (!e.annual) return e.on >= ref ? e.on : null;
+    const [, mm, dd] = e.on.split('-');
+    const y = Number(ref.slice(0, 4));
+    /* Feb 29 in a common year is marked on the 28th rather than skipped — a
+       birthday that disappears three years in four is a bug, not a purist point */
+    const on = (yy) => { const dim = new Date(yy, Number(mm), 0).getDate(); return `${yy}-${mm}-${pad(Math.min(Number(dd), dim))}`; };
+    return on(y) >= ref ? on(y) : on(y + 1);
+  }
+  /* Only ever from `born`, which is set when a year was actually written down.
+     Deriving it from `on` counted the year we guessed and had "mum" turning 1. */
+  function eventAge(it, key) {
+    const e = it && it.event;
+    if (!e || !e.annual || !e.born) return null;
+    const yr = Number((key || todayKey()).slice(0, 4));
+    return yr > e.born ? yr - e.born : null;
+  }
+  NB.eventFallsOn = eventFallsOn; NB.eventNext = eventNext; NB.eventAge = eventAge;
+
   /* Everything that belongs on a given day column (front-of-book + echoes). */
   function dayItems(key) {
     const out = { timed: [], tasks: [], echoes: [], carried: [], done: [] };
@@ -991,12 +1117,53 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       if (it.kind === 'health' && it.date === key && !it.done) {
         out.echoes.push({ echo: 'health', item: it });
       }
+      if (it.kind === 'event' && it.event && eventFallsOn(it, key)) {
+        out.echoes.push({ echo: it.event.annual ? 'birthday' : 'event', item: it });
+      }
     }
     out.timed.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     out.done.sort((a, b) => (a.doneAt || '').localeCompare(b.doneAt || ''));
     return out;
   }
   NB.dayItems = dayItems;
+
+  /* What a calendar cell needs to know, and nothing more: which kinds land on
+     this day. The month grid draws one dot per kind, not one per item — thirty
+     dots on the 1st is noise, and the point of the month is the shape of it. */
+  const CAL_KINDS = ['event', 'bill', 'health', 'renewal', 'task'];
+  function dayMarks(key) {
+    const d = dayItems(key);
+    const marks = new Set();
+    for (const e of d.echoes) marks.add(e.echo === 'birthday' ? 'event' : e.echo);
+    if (d.timed.length || d.tasks.length || d.carried.length) marks.add('task');
+    return CAL_KINDS.filter((k) => marks.has(k));
+  }
+  /* One pass over the month rather than one pass per cell. */
+  function monthMarks(mk) {
+    const days = new Date(Number(mk.slice(0, 4)), Number(mk.slice(5, 7)), 0).getDate();
+    const out = {};
+    for (let d = 1; d <= days; d++) {
+      const key = `${mk}-${pad(d)}`;
+      const m = dayMarks(key);
+      if (m.length) out[key] = m;
+    }
+    return out;
+  }
+  function monthBusy(mk) { return Object.keys(monthMarks(mk)).length; }
+  NB.dayMarks = dayMarks; NB.monthMarks = monthMarks; NB.monthBusy = monthBusy; NB.CAL_KINDS = CAL_KINDS;
+
+  /* Birthdays and events coming up, soonest first — the month page lists them
+     under the grid so the calendar answers "what's coming" without tapping. */
+  function upcomingEvents(days) {
+    const from = todayKey();
+    const limit = addDays(from, days || 60);
+    return state.items
+      .filter((i) => i.kind === 'event' && i.event)
+      .map((i) => ({ item: i, on: eventNext(i, from) }))
+      .filter((x) => x.on && x.on <= limit)
+      .sort((a, b) => a.on.localeCompare(b.on));
+  }
+  NB.upcomingEvents = upcomingEvents;
 
   /* ---------------- the local brain (offline heuristics) ---------------- */
   const VERBS = 'call text email message buy get grab book pay renew pick send fix clean schedule cancel return finish submit order drop take bring check ask water walk feed read write plan visit sign print wash move update reply remind'.split(' ');
@@ -1012,9 +1179,22 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   const BILL_WORDS = /\b(rent|bill|electricity|electric|water bill|internet|wifi|phone bill|subscription|insurance|utilities|gas bill)\b/i;
   /* things that are plainly a payment without ever saying "bill" */
   const PAY_WORDS = /\b(membership|mortgage|loan|premium|dues|fees?|instal?ments?|direct debit|standing order|cleaner|childcare|daycare|storage|parking|tuition|gym)\b/i;
-  const RENEWAL_RE = /\b(passport|licen[cs]e|registration|rego|visa|lease|insurance) .*\b(expires?|renewal?|due|runs out|is up|ends|up for renewal)\b|\b(expires?|renew)\b.*\b(passport|licen[cs]e|registration|rego|visa|lease)\b/i;
+  /* `renewal?` only ever matched "renewa"/"renewal", so "car insurance renews
+     in September" — the most natural way to write it — matched nothing at all
+     and fell through to the chatter fallback, which files nothing. */
+  const RENEWS = 'renew(?:s|al|ed|ing)?';
+  const RENEWAL_RE = new RegExp(`\\b(passport|licen[cs]e|registration|rego|visa|lease|insurance) .*\\b(expires?|${RENEWS}|due|runs out|is up|ends|up for renewal)\\b|\\b(expires?|${RENEWS})\\b.*\\b(passport|licen[cs]e|registration|rego|visa|lease)\\b`, 'i');
   const HEALTH_RE = /\b(doctor|dentist|dr\.?\s|appointment|prescription|refill|check-?up|physio|therapist|meds)\b/i;
   const ROUTINE_RE = /\bevery (day|morning|night|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b|\bdaily\b/i;
+  const BIRTHDAY_RE = /\b(birthday|bday|b-day|turns \d+|was born)\b/i;
+  /* things that sit on a date and aren't a to-do: you don't tick a wedding */
+  const EVENT_RE = /\b(anniversary|wedding|graduation|christening|funeral|concert|gig|festival|match|game|flight|holiday|vacation|trip|party|reunion|exam|interview|moving day|christmas|new year'?s?|easter|thanksgiving|halloween|diwali|eid|hanukkah)\b/i;
+  /* an anniversary comes round like a birthday does — only the one-off events
+     above (a concert, a flight, an exam) happen once */
+  const ANNUAL_RE = /\b(birthday|bday|b-day|was born|anniversary)\b/i;
+  /* "14 March" / "March 14" / "14/03" — a bare date with no year, which is how
+     a birthday is nearly always written down */
+  const DAYMONTH_RE = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\b/i;
 
   /* The row prints the time as its own chip, so a label that repeats it reads
      as a stutter: "🕕 6pm  gym at 6pm". Only ever called when parseWhen found a
@@ -1113,6 +1293,28 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   }
   NB.parseAmount = parseAmount;
 
+  /* A birthday is nearly always written without a year — "mum's birthday is 14
+     March". parseWhen would file that as the next 14 March, which is right for
+     the calendar but loses nothing, so we take its answer and mark the item
+     annual. A written year ("born 12 May 1990") is kept so ages can be shown. */
+  function readEventDate(seg) {
+    const yr = seg.match(/\b(19\d{2}|20\d{2})\b/);
+    const dm = seg.match(DAYMONTH_RE);
+    const { date } = parseWhen(seg);
+    let on = date;
+    if (!on && dm) {
+      const m = MONTHS.findIndex((x) => x.startsWith(dm[2].toLowerCase()));
+      if (m >= 0) on = `${yr ? yr[1] : todayKey().slice(0, 4)}-${pad(m + 1)}-${pad(Number(dm[1]))}`;
+    }
+    if (!on) return { on: null, born: null };
+    /* `born` is only set when a year was actually written down. `on` always
+       carries some year so date maths works, but that year is usually a guess —
+       without the distinction "mum's birthday is 14 March" reported her as
+       turning 1 next year. */
+    return { on: yr ? `${yr[1]}-${on.slice(5)}` : on, born: yr ? Number(yr[1]) : null };
+  }
+  NB.readEventDate = readEventDate;
+
   /* Read a debt sentence: which direction, and how much. */
   function readDebt(seg) {
     const iOwe = I_OWE_RE.test(seg), theyOwe = THEY_OWE_RE.test(seg);
@@ -1146,9 +1348,14 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       .split(/\n+|(?:,\s*)?\b(?:also|and then|btw|oh and)\b/i)
       .map((s) => s && s.trim()).filter((s) => s && s.length > 2);
 
+    /* These caps were 12 segments and 6 items, which meant a twelve-line
+       brain-dump was silently truncated — everything after the sixth thing you
+       wrote just never arrived. The whole promise of the app is that you empty
+       your head into it, so the limit only exists to stop a pasted novel from
+       filing a hundred rows, not to ration ordinary use. */
     const items = [];
-    for (const seg of segs.slice(0, 12)) {
-      if (items.length >= 6) break;
+    for (const seg of segs.slice(0, 60)) {
+      if (items.length >= 40) break;
       const { date, time } = parseWhen(seg);
       const cad = parseCadence(seg);
       /* A price with a rhythm or a due date is a charge whatever it's called —
@@ -1162,6 +1369,29 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       const clean = seg.replace(/^[-•*\s]+/, '').replace(/[.,;:?!\s]+$/, '');
       const title = clean.length > 64 ? clean.slice(0, 61) + '…' : clean;
 
+      /* Read before money and before to-dos: "mum's birthday, get a cake 30
+         quid" is a birthday with an errand attached, not a bill; and a birthday
+         is not something you tick off. */
+      if (BIRTHDAY_RE.test(seg) || EVENT_RE.test(seg)) {
+        const annual = ANNUAL_RE.test(seg);
+        const { on, born } = readEventDate(seg);
+        /* strip the calendar words out of the label — the row already shows the
+           date, and "🎂 Mum's birthday 14 March" says it twice */
+        let name = stripWhen(clean.replace(DAYMONTH_RE, ' ').replace(/\b(?:19|20)\d{2}\b/, ' '))
+          /* "was born" comes off as a phrase — trimming word by word left "Ana was" */
+          .replace(/\s+(?:was\s+born|is|on|in|are)\s*$/i, '')
+          .replace(/\s{2,}/g, ' ').replace(/[.,;:\s]+$/, '').trim() || clean;
+        /* "ana was born 12 May" names a person, not an occasion — say what the
+           row is for, since it sits on a calendar next to other birthdays */
+        if (/\bwas born\b/i.test(seg) && !/birthday/i.test(name)) name = `${name}'s birthday`;
+        name = name[0].toUpperCase() + name.slice(1);
+        items.push({
+          kind: 'event', text: name, quote: seg, date: on, time: null, amount: null,
+          annual, born, confidence: on ? 'sure' : 'unsure',
+          question: on ? null : (annual ? 'When is it?' : 'What date?'),
+        });
+        continue;
+      }
       if (OWE_RE.test(seg)) {
         /* "dave owes me 60" says which way round it goes — only ask when it doesn't. */
         const d = readDebt(seg);
@@ -1232,7 +1462,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
         items: {
           type: 'object', additionalProperties: false,
           properties: {
-            kind: { type: 'string', enum: ['task', 'routine', 'bill', 'goal', 'idea', 'renewal', 'debt', 'health'] },
+            kind: { type: 'string', enum: ['task', 'routine', 'bill', 'goal', 'idea', 'renewal', 'debt', 'health', 'event'] },
             text: { type: 'string', description: 'Short imperative label for the notebook, ≤60 chars.' },
             quote: { type: 'string', description: 'The verbatim source span this came from.' },
             date: { type: ['string', 'null'], description: 'YYYY-MM-DD, or null.' },
@@ -1241,10 +1471,12 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
             dir: { type: ['string', 'null'], enum: ['they', 'me', null], description: 'debt only: they owe user, or user owes them.' },
             cadence: { type: ['string', 'null'], enum: ['weekly', 'fortnightly', 'monthly', 'bimonthly', 'quarterly', 'semiannual', 'yearly', 'once', null], description: 'bill only: how often it repeats. Default monthly; fortnightly for "every 2 weeks"; bimonthly for "every 2 months"; semiannual for "every 6 months".' },
             lastDay: { type: ['boolean', 'null'], description: 'bill only: true when it falls on the last day of the month rather than a fixed date.' },
+            annual: { type: ['boolean', 'null'], description: 'event only: true for birthdays and anniversaries that come round every year.' },
+            born: { type: ['integer', 'null'], description: 'event only: the birth year, ONLY when the text actually states one. Null otherwise — never guess.' },
             confidence: { type: 'string', enum: ['sure', 'unsure'] },
             question: { type: ['string', 'null'], description: 'ONE short question if unsure, else null.' },
           },
-          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'cadence', 'lastDay', 'confidence', 'question'],
+          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'cadence', 'lastDay', 'annual', 'born', 'confidence', 'question'],
         },
       },
     },
@@ -1293,7 +1525,9 @@ Rules, non-negotiable:
     if (!textBlock || !textBlock.text) throw new Error('Empty reply — try a shorter dump.');
     let parsed;
     try { parsed = JSON.parse(textBlock.text); } catch (e) { throw new Error('Couldn\'t read the reply — try again.'); }
-    return (parsed.items || []).slice(0, 6);
+    /* same reasoning as localExtract's cap: high enough that a real dump never
+       loses a line, low enough that a pasted document can't file a hundred */
+    return (parsed.items || []).slice(0, 40);
   }
 
   /* One front door: Claude if a key is set, the local brain otherwise (or on failure). */
@@ -1341,6 +1575,12 @@ Rules, non-negotiable:
         it = addItem({ kind: 'goal', text: r.text, ink: !unsure, source: src, bucket: 'goals' });
       } else if (r.kind === 'idea') {
         it = addItem({ kind: 'idea', text: r.text, ink: !unsure, source: src, bucket: 'ideas' });
+      } else if (r.kind === 'event') {
+        const on = norm(r.date);
+        it = addItem({
+          kind: 'event', text: r.text, ink: !unsure && !!on, source: src, bucket: 'day',
+          event: { on, annual: !!r.annual, born: r.born || null },
+        });
       } else if (r.kind === 'health') {
         it = addItem({ kind: 'health', text: r.text, ink: !unsure, source: src, bucket: 'day', date: norm(r.date), time: r.time || null });
       } else if (r.kind === 'routine') {
@@ -1452,7 +1692,9 @@ Rules, non-negotiable:
     else if (rot === 2 && debtOwed) l3 = `${debtOwed.text} — a nudge isn't rude, it's bookkeeping.`;
     else if (idea) l3 = pick([`"${idea.text}" has been sitting in Ideas, whistling innocently.`, `Ideas holds "${idea.text}" whenever you're ready.`]);
     else if (goal) l3 = `"${goal.text}" is still on the horizon. One small move counts.`;
-    else l3 = pick(['Tick something and watch it arrive in Done, proud.', 'Add anything at any time — it gets sorted for you.']);
+    /* not "watch it arrive in Done" any more — a ticked thing stays on the day,
+       struck through, so the old line described something that stopped happening */
+    else l3 = pick(['Tick something and it stays put, struck through.', 'Add anything at any time — it gets sorted for you.']);
 
     return { l1, l2, l3 };
   }
@@ -1579,8 +1821,8 @@ Rules, non-negotiable:
 <script>
 /* =========================================================================
    My Notebook — ui.js
-   Everything you see: the week spread, Today, the sort, the Back Pages,
-   the Desk, and the flyleaf. Renders from NB (core.js).
+   Everything you see: Today, the Calendar, the sort, Money, Notes and
+   Settings. Renders from NB (core.js).
    ========================================================================= */
 (function () {
   'use strict';
@@ -1588,9 +1830,13 @@ Rules, non-negotiable:
   const D = NB.dates;
 
   /* ---------------- ui state ---------------- */
-  let view = 'today';                 /* today | week | money | notes | done */
+  let view = 'today';                 /* today | calendar | money | notes | done */
   let backTab = 'bills';              /* Money page: bills | owed | renewals */
   let notesTab = 'ideas';             /* Notes page: ideas | goals | health */
+  let calTab = 'week';                /* Calendar page: week | month | year */
+  let calMonth = null;                /* 'YYYY-MM' the month grid is showing */
+  let calYear = null;                 /* the year the year page is showing */
+  let calDay = null;                  /* the day opened under the month grid */
   let expandedId = null;
   let whisperTimer = null;
 
@@ -1625,9 +1871,12 @@ Rules, non-negotiable:
   });
 
   /* ---------------- tabs ---------------- */
+  /* Five, still. Week didn't become a sixth tab when Month and Year arrived —
+     they're three zooms of the same thing, so they group under Calendar the way
+     Bills/Owed/Renewals group under Money. */
   const TABS = [
     { id: 'today', label: 'Today', wash: '' },
-    { id: 'week', label: 'Week', wash: '' },
+    { id: 'calendar', label: 'Calendar', wash: '' },
     { id: 'money', label: 'Money', wash: '' },
     { id: 'notes', label: 'Notes', wash: '' },
     { id: 'done', label: 'Done', wash: '' },
@@ -1709,11 +1958,16 @@ Rules, non-negotiable:
       </div>` : '';
     const renewalBits = it.kind === 'renewal' && it.renewal ? `
       <div class="bill-edit fig"><label>expires <input data-edit="expires" type="date" value="${esc(it.renewal.expires || '')}"></label></div>` : '';
+    const eventBits = it.kind === 'event' && it.event ? `
+      <div class="bill-edit fig">
+        <label>date <input data-edit="on" type="date" value="${esc(it.event.on || '')}"></label>
+        <label class="autolabel"><input data-edit="annual" type="checkbox" ${it.event.annual ? 'checked' : ''}> every year</label>
+      </div>` : '';
     return `
     <div class="detail">
       ${receipt}
       <div class="edit-line"><input class="edit-text hand" data-edit="text" value="${esc(it.text)}" aria-label="Edit text"></div>
-      ${billBits}${renewalBits}
+      ${billBits}${renewalBits}${eventBits}
       ${when}
       <div class="detail-acts fig">
         <button type="button" class="linky" data-act="toss">toss</button>
@@ -1748,7 +2002,7 @@ Rules, non-negotiable:
           <button type="button" class="brief-x fig" data-act="fold" aria-label="fold the note">fold</button>
         </div>`;
 
-    const echoes = d.echoes.map(echoHTML).join('');
+    const echoes = d.echoes.map((e) => echoHTML(e, t)).join('');
     const open = d.timed.length + d.tasks.length + d.carried.length + d.echoes.length;
     /* "nothing yet" and "all of it done" are different days — don't tell someone
        who just cleared their list that they haven't started */
@@ -1789,18 +2043,26 @@ Rules, non-negotiable:
     </form>`;
   }
 
-  function echoHTML(e) {
+  function echoHTML(e, onKey) {
     const it = e.item;
-    const cls = { bill: 'e-bill', renewal: 'e-renewal', health: 'e-health' }[e.echo];
+    const cls = { bill: 'e-bill', renewal: 'e-renewal', health: 'e-health', event: 'e-event', birthday: 'e-birthday' }[e.echo];
     const tick = e.echo === 'bill' ? `<button class="tick small" data-act="paybill" type="button" aria-label="mark paid"></button>`
       : e.echo === 'health' ? `<button class="tick small" data-act="tick" type="button"></button>` : '';
+    /* a typographic mark, not an emoji — nothing else in this app uses one, and
+       a lone 🎂 in a column of clean type is the thing that reads as a template */
+    const glyph = e.echo === 'birthday' || e.echo === 'event'
+      ? '<span class="e-glyph" aria-hidden="true">◆</span>' : '';
     const label = esc(it.text);
     const amt = it.bill && it.bill.amount != null ? `<span class="fig e-amt">· $${NB.fmtAmt(it.bill.amount)}</span>` : '';
     const auto = it.bill && it.bill.autopay ? `<span class="autotag fig">auto</span>` : '';
-    return `<div class="echo ${cls}" data-id="${it.id}">${tick}<span class="hand e-text" data-act="goback">${label}</span>${amt}${auto}<span class="dogear" title="lives in the Back Pages" data-act="goback"></span></div>`;
+    /* "turns 9" only when a real birth year was written down */
+    const age = e.echo === 'birthday' ? NB.eventAge(it, onKey) : null;
+    const turns = age ? `<span class="fig e-amt">· turns ${age}</span>` : '';
+    const to = e.echo === 'birthday' || e.echo === 'event' ? 'openevent' : 'goback';
+    return `<div class="echo ${cls}" data-id="${it.id}">${tick}${glyph}<span class="hand e-text" data-act="${to}">${label}</span>${amt}${turns}${auto}<span class="dogear" data-act="${to}"></span></div>`;
   }
 
-  function weekView() {
+  function weekPage() {
     const t = D.todayKey();
     const week = D.weekOf(t);
     const weekBand = NB.itemsFor((i) => !i.done && i.bucket === 'week');
@@ -1814,7 +2076,7 @@ Rules, non-negotiable:
          day showing an empty card when you cleared it read as "you did nothing" */
       const rows = [
         ...d.timed.map((i) => rowHTML(i)),
-        ...d.echoes.map(echoHTML),
+        ...d.echoes.map((e) => echoHTML(e, key)),
         ...d.tasks.map((i) => rowHTML(i)),
         ...d.carried.map((i) => rowHTML(i)),
         ...d.done.map((i) => rowHTML(i)),
@@ -1828,12 +2090,140 @@ Rules, non-negotiable:
     }).join('');
 
     return `
-      ${pageTitle('This week', `${esc(D.niceDate(week[0]))} – ${esc(D.niceDate(week[6]))}`)}
+      <div class="calhead"><span class="calspan fig">${esc(D.niceDate(week[0]))} – ${esc(D.niceDate(week[6]))}</span></div>
       <div class="weekscroll"><div class="week">${cols}</div></div>
       ${weekBand.length ? `<div class="band"><span class="band-label fig">this week, no day yet</span><div class="rows">${weekBand.map((i) => rowHTML(i)).join('')}</div></div>` : ''}
       ${upcoming.length ? `<div class="band"><span class="band-label fig">next up</span><div class="rows">${upcoming.sort((a, b) => (a.date || '').localeCompare(b.date || '')).map((i) => `<div class="row" data-id="${i.id}"><div class="row-main"><button class="tick" data-act="tick" type="button" aria-label="tick"></button><span class="row-text hand" data-act="open">${esc(i.text)}</span><span class="bwhen fig">${esc(D.niceDate(i.date))}</span></div></div>`).join('')}</div></div>` : ''}
       ${later.length ? `<div class="band later"><span class="band-label fig">later</span><div class="rows">${later.map((i) => rowHTML(i)).join('')}</div></div>` : ''}
     `;
+  }
+
+  /* ---------------- month ----------------
+     Seven narrow columns of numbers and dots. This is the one place a 7-across
+     grid fits, because a cell holds a number and up to five 4px dots — not the
+     day cards the week shows. One dot per KIND, never per item: thirty dots on
+     the 1st is noise, and the month is meant to show the shape of the month. */
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const shiftMonth = (mk, by) => {
+    const d = new Date(Number(mk.slice(0, 4)), Number(mk.slice(5, 7)) - 1 + by, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  function monthPage() {
+    const t = D.todayKey();
+    const mk = calMonth || t.slice(0, 7);
+    const [y, m] = [Number(mk.slice(0, 4)), Number(mk.slice(5, 7))];
+    const marks = NB.monthMarks(mk);
+    const days = new Date(y, m, 0).getDate();
+    /* Monday-first, to match the week page */
+    const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push('<div class="cell out"></div>');
+    for (let d = 1; d <= days; d++) {
+      const key = `${mk}-${String(d).padStart(2, '0')}`;
+      const kinds = marks[key] || [];
+      const dots = kinds.map((k) => `<span class="dot dot-${k}"></span>`).join('');
+      const cls = [key === t ? 'is-today' : '', key < t ? 'is-past' : '', calDay === key ? 'is-open' : ''].filter(Boolean).join(' ');
+      cells.push(`<button type="button" class="cell ${cls}" data-act="calday" data-date="${key}" aria-label="${esc(D.niceDate(key))}${kinds.length ? `, ${kinds.length} thing${kinds.length > 1 ? 's' : ''}` : ''}"${calDay === key ? ' aria-current="date"' : ''}>
+        <span class="cellnum fig">${d}</span><span class="dots">${dots}</span>
+      </button>`);
+    }
+
+    const soon = NB.upcomingEvents(60);
+    const open = calDay ? NB.dayItems(calDay) : null;
+    const openRows = open ? [
+      ...open.timed.map((i) => rowHTML(i)),
+      ...open.echoes.map((e) => echoHTML(e, calDay)),
+      ...open.tasks.map((i) => rowHTML(i)),
+      ...open.carried.map((i) => rowHTML(i)),
+      ...open.done.map((i) => rowHTML(i)),
+    ].join('') : '';
+
+    return `
+      <div class="calhead">
+        <button type="button" class="calnav" data-act="calmonth" data-by="-1" aria-label="Previous month">‹</button>
+        <span class="calspan fig">${MONTH_NAMES[m - 1]} ${y}</span>
+        <button type="button" class="calnav" data-act="calmonth" data-by="1" aria-label="Next month">›</button>
+      </div>
+      ${mk !== t.slice(0, 7) ? `<div class="caltoday"><button type="button" class="linky" data-act="calmonth" data-by="0">Back to ${MONTH_NAMES[Number(t.slice(5, 7)) - 1]}</button></div>` : ''}
+      <div class="monthgrid" role="grid" aria-label="${MONTH_NAMES[m - 1]} ${y}">
+        ${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((n, i) => `<span class="colhead fig" aria-hidden="true">${n}</span>`).join('')}
+        ${cells.join('')}
+      </div>
+      ${calDay ? `<div class="dayopen">
+        <div class="dayopen-head"><span class="band-label fig">${esc(D.niceDate(calDay))}</span><button type="button" class="linky" data-act="calclose">close</button></div>
+        <div class="rows">${openRows}</div>
+        ${!openRows ? emptyLine('Nothing on this day yet.') : ''}
+        ${jotHTML(calDay, 'Add to this day')}
+      </div>` : ''}
+      ${soon.length ? `<div class="band">
+        <span class="band-label fig">coming up</span>
+        <div class="rows">${soon.map(({ item, on }) => `
+          <div class="row" data-id="${item.id}"><div class="row-main">
+            <span class="e-glyph" aria-hidden="true">◆</span>
+            <span class="row-text hand" data-act="openevent">${esc(item.text)}${NB.eventAge(item, on) ? `<span class="turns fig">turns ${NB.eventAge(item, on)}</span>` : ''}</span>
+            <span class="bwhen fig">${esc(D.niceDate(on))}</span>
+          </div>${expandedId === item.id ? detailHTML(item) : ''}</div>`).join('')}</div>
+      </div>` : ''}
+      ${eventFormHTML(`${mk}-01`)}
+    `;
+  }
+
+  /* ---------------- year ----------------
+     Twelve small months, each a bar of how full it is plus the birthdays and
+     events in it. Not twelve grids: at 390px that's 84 unreadable cells a
+     month, which is exactly the overwhelm a year view is supposed to remove. */
+  function yearPage() {
+    const t = D.todayKey();
+    const y = calYear || Number(t.slice(0, 4));
+    const events = NB.itemsFor((i) => i.kind === 'event' && i.event && i.event.on);
+
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const mk = `${y}-${String(i + 1).padStart(2, '0')}`;
+      const busy = NB.monthBusy(mk);
+      const mine = events
+        .filter((e) => (e.event.annual ? Number(e.event.on.slice(5, 7)) === i + 1 : e.event.on.slice(0, 7) === mk))
+        .sort((a, b) => a.event.on.slice(8).localeCompare(b.event.on.slice(8)));
+      const isNow = mk === t.slice(0, 7);
+      /* No bar. A bar scaled to the busiest month drew one birthday as
+         near-full, which is a chart that lies; the count is the honest number
+         and the names are what you actually came to see. */
+      return `
+      <button type="button" class="ymonth ${isNow ? 'is-now' : ''} ${busy ? '' : 'is-quiet'}" data-act="calopen" data-month="${mk}">
+        <span class="yname fig">${MONTH_NAMES[i]}</span>
+        <span class="ycount fig">${busy ? `${busy} day${busy > 1 ? 's' : ''}` : ''}</span>
+        ${mine.length ? `<span class="yevents">${mine.map((e) => `<span class="yev"><span class="yday fig">${Number(e.event.on.slice(8))}</span>${esc(e.text)}</span>`).join('')}</span>` : ''}
+      </button>`;
+    }).join('');
+
+    return `
+      <div class="calhead">
+        <button type="button" class="calnav" data-act="calyear" data-by="-1" aria-label="Previous year">‹</button>
+        <span class="calspan fig">${y}</span>
+        <button type="button" class="calnav" data-act="calyear" data-by="1" aria-label="Next year">›</button>
+      </div>
+      <div class="yeargrid">${months}</div>
+      ${!events.length ? emptyLine('No birthdays or events yet. Add one under Month, or just write "mum\'s birthday is 14 March" in Add.') : ''}
+    `;
+  }
+
+  /* A year you picked by hand only counts as a birth year if it's in the past.
+     Picking this year's 14 March means "her birthday", not "born this year". */
+  function bornFrom(on, annual) {
+    const y = Number(on.slice(0, 4));
+    return annual && y < Number(D.todayKey().slice(0, 4)) ? y : null;
+  }
+
+  /* One form for both, because a birthday IS an event that ignores the year —
+     a separate "add a birthday" form would be the same four fields twice. */
+  function eventFormHTML(defaultDate) {
+    return `
+    <form class="addform fig" data-form="event">
+      <input name="name" placeholder="Birthday or event" required>
+      <input name="on" type="date" value="${esc(defaultDate || '')}" aria-label="date" required>
+      <label class="autolabel"><input name="annual" type="checkbox" checked> every year</label>
+      <button type="submit" class="chip">Add</button>
+    </form>`;
   }
 
   function goalsPage() {
@@ -1882,16 +2272,23 @@ Rules, non-negotiable:
     `;
   }
 
-  /* ---------------- back pages ---------------- */
+  /* ---------------- the grouped sub-pages ---------------- */
   /* Two grouped pages instead of a nested rail of four. Everything that costs
      money sits under Money; everything you jotted sits under Notes. */
+  const CAL_TABS = [
+    { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' },
+  ];
   const MONEY_TABS = [
     { id: 'bills', label: 'Bills' }, { id: 'owed', label: 'Owed' }, { id: 'renewals', label: 'Renewals' },
   ];
   const NOTES_TABS = [
     { id: 'ideas', label: 'Ideas' }, { id: 'goals', label: 'Goals' }, { id: 'health', label: 'Health' },
   ];
-  const PAGES = { bills: billsPage, owed: owedPage, renewals: renewalsPage, ideas: ideasPage, goals: goalsPage, health: healthPage };
+  const PAGES = {
+    week: weekPage, month: monthPage, year: yearPage,
+    bills: billsPage, owed: owedPage, renewals: renewalsPage,
+    ideas: ideasPage, goals: goalsPage, health: healthPage,
+  };
 
   function segmented(tabs, current) {
     return tabs.map((b) => `<button type="button" class="bthumb b-${b.id} ${current === b.id ? 'on' : ''}" data-backtab="${b.id}">${b.label}</button>`).join('');
@@ -1900,6 +2297,7 @@ Rules, non-negotiable:
     if (!tabs.some((t) => t.id === current)) current = tabs[0].id;
     return `<div class="backwrap"><div class="bthumbs">${segmented(tabs, current)}</div><div class="backpage bp-${current}">${PAGES[current]()}</div></div>`;
   }
+  function calendarView() { return grouped(CAL_TABS, calTab); }
   function moneyView() { return grouped(MONEY_TABS, backTab); }
   function notesView() { return grouped(NOTES_TABS, notesTab); }
 
@@ -2049,7 +2447,7 @@ Rules, non-negotiable:
   function render() {
     applyTheme();
     renderTabs();
-    const v = { today: todayView, week: weekView, money: moneyView, notes: notesView, done: doneView }[view] || todayView;
+    const v = { today: todayView, calendar: calendarView, money: moneyView, notes: notesView, done: doneView }[view] || todayView;
     $('#page').innerHTML = v();
     $('#page').dataset.view = view;
   }
@@ -2126,13 +2524,16 @@ Rules, non-negotiable:
     /* overlay was closed mid-sort — still land the items, just re-render the page */
     if (!document.querySelector('#sort-stage')) { closeOverlay(); render(); return; }
 
-    const tabOf = (it) => it.kind === 'bill' ? 'Bills' : it.kind === 'renewal' ? 'Renewals' : it.kind === 'debt' ? 'Owed' : it.kind === 'health' ? 'Health' : it.kind === 'goal' ? 'Goals' : it.kind === 'idea' ? 'Ideas' : it.date ? D.dayName(it.date, true) : 'This week';
+    const tabOf = (it) => it.kind === 'bill' ? 'Bills' : it.kind === 'renewal' ? 'Renewals' : it.kind === 'debt' ? 'Owed' : it.kind === 'health' ? 'Health' : it.kind === 'goal' ? 'Goals' : it.kind === 'idea' ? 'Ideas' : it.kind === 'event' ? 'Calendar' : it.date ? D.dayName(it.date, true) : 'This week';
+    /* stagger, but cap it: at a flat 120ms a twenty-line dump took three
+       seconds to finish arriving, and you sat there watching it */
+    const delay = (i) => Math.min(i * 90, 1100);
     stage.innerHTML = `
       <div class="sorted">
-        ${result.filed.map((it, i) => `<div class="sorted-row" style="animation-delay:${i * 120}ms"><span class="hand">${esc(it.text)}</span><span class="fig sorted-tab">→ ${esc(tabOf(it))}</span></div>`).join('')}
-        ${result.parked.map((it, i) => `<div class="sorted-row parked" style="animation-delay:${(result.filed.length + i) * 120}ms"><span class="hand">${esc(it.text)}</span><span class="fig sorted-tab">✎ a quick word</span></div>`).join('')}
+        ${result.filed.map((it, i) => `<div class="sorted-row" style="animation-delay:${delay(i)}ms"><span class="hand">${esc(it.text)}</span><span class="fig sorted-tab">→ ${esc(tabOf(it))}</span></div>`).join('')}
+        ${result.parked.map((it, i) => `<div class="sorted-row parked" style="animation-delay:${delay(result.filed.length + i)}ms"><span class="hand">${esc(it.text)}</span><span class="fig sorted-tab">✎ a quick word</span></div>`).join('')}
         <div class="sorted-tally hand">${esc(tallyLabel(raw))}${brain === 'local' ? ' <span class="fig">(sorted offline' + (note ? ' — ' + esc(note) : '') + ')</span>' : ''}</div>
-        <button type="button" class="pbtn primary" data-act="close-rerender">Lovely</button>
+        <button type="button" class="pbtn primary" data-act="close-rerender">Done</button>
       </div>`;
   }
   function tallyLabel(raw) {
@@ -2178,7 +2579,7 @@ Rules, non-negotiable:
     log.scrollTop = log.scrollHeight;
   }
 
-  /* ---------------- flyleaf (settings) ---------------- */
+  /* ---------------- settings ---------------- */
   /* the sync state, said plainly */
   function syncLine() {
     const st = NB.sync || { status: 'off' };
@@ -2231,6 +2632,12 @@ Rules, non-negotiable:
             <button type="button" class="pbtn" data-act="export">Export notebook</button>
             <label class="pbtn filebtn">Import<input type="file" accept=".json" data-act="import" hidden></label>
           </div>
+          <label>Give a friend their own <span class="hint">(they get an empty notebook, not yours)</span></label>
+          <div class="set-acts">
+            <button type="button" class="pbtn" data-act="share">Share the link</button>
+            <span class="hint" id="share-line"></span>
+          </div>
+          <p class="hint">Nothing about your notebook is in that link — it's just the address of the page. Whoever opens it starts empty, and what they write is saved on their device, not yours.</p>
           <div class="set-acts">
             <button type="button" class="pbtn danger" data-act="closebook">Close the notebook</button>
           </div>
@@ -2257,7 +2664,7 @@ Rules, non-negotiable:
     if (it.kind === 'debt') return 'Settled and crossed out.';
     if (it.kind === 'health') return 'Done. Kindly noted.';
     if (it.kind === 'renewal') return 'Handled. One less quiet thing.';
-    const lines = ['Done and inked.', 'Struck through, with feeling.', 'One down.', 'Into Done it goes, proud.'];
+    const lines = ['Done and inked.', 'Struck through, with feeling.', 'One down.', 'Struck off the day.'];
     return lines[Math.floor(Math.random() * lines.length)];
   }
 
@@ -2289,8 +2696,10 @@ Rules, non-negotiable:
     if (tabBtn) { view = tabBtn.dataset.view; expandedId = null; render(); return; }
     const bt = e.target.closest('[data-backtab]');
     if (bt) {
-      if (NOTES_TABS.some((t) => t.id === bt.dataset.backtab)) notesTab = bt.dataset.backtab;
-      else backTab = bt.dataset.backtab;
+      const id = bt.dataset.backtab;
+      if (CAL_TABS.some((t) => t.id === id)) calTab = id;
+      else if (NOTES_TABS.some((t) => t.id === id)) notesTab = id;
+      else backTab = id;
       expandedId = null; render(); return;
     }
 
@@ -2323,6 +2732,23 @@ Rules, non-negotiable:
       const l = $('#sync-line'); if (l) l.textContent = 'Catching up…';
       return;
     }
+    if (a === 'share') {
+      /* the page's own address and nothing else — no id, no token, no query.
+         Whoever opens it gets an empty notebook on their own device. */
+      const link = location.origin + location.pathname;
+      const said = (msg) => { const l = $('#share-line'); if (l) l.textContent = msg; };
+      const shareData = { title: 'My Notebook', text: 'A notebook that files your life for you.', url: link };
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        navigator.share(shareData).then(() => said('Shared.')).catch(() => said(link));
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => said('Link copied.')).catch(() => said(link));
+        return;
+      }
+      said(link);
+      return;
+    }
     if (a === 'export') {
       const blob = new Blob([NB.exportJSON()], { type: 'application/json' });
       const aEl = document.createElement('a');
@@ -2337,6 +2763,39 @@ Rules, non-negotiable:
       return;
     }
     if (a === 'goback') { view = 'money'; backTab = 'bills'; render(); return; }
+
+    /* ---- calendar ---- */
+    if (a === 'calmonth') {
+      const by = Number(act.dataset.by);
+      const base = calMonth || D.todayKey().slice(0, 7);
+      calMonth = by === 0 ? D.todayKey().slice(0, 7) : shiftMonth(base, by);
+      calDay = null; expandedId = null; render(); return;
+    }
+    if (a === 'calyear') {
+      calYear = (calYear || Number(D.todayKey().slice(0, 4))) + Number(act.dataset.by);
+      render(); return;
+    }
+    if (a === 'calopen') {
+      /* tapping a month in the year view drops you into that month */
+      calMonth = act.dataset.month; calTab = 'month'; calDay = null; render(); return;
+    }
+    if (a === 'calday') {
+      calDay = calDay === act.dataset.date ? null : act.dataset.date;
+      expandedId = null; render();
+      if (calDay) { const f = document.querySelector(`.dayopen .jot input[name="text"]`); if (f) f.focus({ preventScroll: true }); }
+      return;
+    }
+    if (a === 'calclose') { calDay = null; render(); return; }
+    if (a === 'openevent') {
+      /* an event's home is the month it lands in */
+      const ev = it && it.event;
+      if (ev) {
+        const on = NB.eventNext(it, D.todayKey()) || ev.on;
+        view = 'calendar'; calTab = 'month'; calMonth = on.slice(0, 7); calDay = on;
+        expandedId = expandedId === it.id ? null : it.id;
+      }
+      render(); return;
+    }
 
     if (!it) return;
     if (a === 'tick') { tick(it); render(); return; }
@@ -2380,6 +2839,10 @@ Rules, non-negotiable:
       }
       if (f === 'autopay' && it.bill) { it.bill.autopay = ed.checked; }
       if (f === 'expires' && it.renewal) { it.renewal.expires = ed.value || null; it.ink = true; it.question = null; }
+      if (f === 'on' && it.event) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(ed.value)) { it.event.on = ed.value; it.event.born = bornFrom(ed.value, it.event.annual); it.ink = true; it.question = null; }
+      }
+      if (f === 'annual' && it.event) { it.event.annual = ed.checked; it.event.born = ed.checked ? bornFrom(it.event.on || '', true) : null; }
       NB.save();
       if (f !== 'text') queueRender(ed);
       return;
@@ -2402,7 +2865,7 @@ Rules, non-negotiable:
     }
   });
 
-  /* live-save the flyleaf as you type, so a half-typed API key survives Escape */
+  /* live-save settings as you type, so a half-typed API key survives Escape */
   document.addEventListener('input', (e) => {
     const st = e.target.closest('[data-set]');
     if (!st) return;
@@ -2441,7 +2904,7 @@ Rules, non-negotiable:
       if (next) next.focus();
       return;
     }
-    NB.withUndo('One down. Got more? I\'ll rule the lines.', () => {
+    NB.withUndo('Added.', () => {
       if (kind === 'bill') {
         const cad = NB.CADENCE[fd.get('cadence')] ? fd.get('cadence') : 'monthly';
         const first = /^\d{4}-\d{2}-\d{2}$/.test(fd.get('first') || '') ? fd.get('first') : null;
@@ -2456,6 +2919,11 @@ Rules, non-negotiable:
         } });
       }
       if (kind === 'renewal') NB.addItem({ kind: 'renewal', text: fd.get('name'), source: src, renewal: { expires: fd.get('date') || null } });
+      if (kind === 'event') {
+        const on = /^\d{4}-\d{2}-\d{2}$/.test(fd.get('on') || '') ? fd.get('on') : null;
+        const annual = !!fd.get('annual');
+        if (on) NB.addItem({ kind: 'event', text: fd.get('name'), source: src, bucket: 'day', event: { on, annual, born: bornFrom(on, annual) } });
+      }
       if (kind === 'debt') {
         /* same reading as a dumped sentence — this form used to need a literal $
            and only understood "i owe", so "I borrowed 50 from Jo" came out backwards */
@@ -2488,7 +2956,7 @@ Rules, non-negotiable:
 
     /* the day can turn while the app stays open (installed PWAs live for days) */
     NB.onStorageError = () => NB.onWhisper('Out of room on this device — export to be safe.');
-    /* keep the flyleaf's line honest while it's open */
+    /* keep the settings sync line honest while it's open */
     NB.onSync = () => { const l = $('#sync-line'); if (l) l.textContent = syncLine(); };
     /* catch up on open, and again whenever the app comes back to the front */
     NB.syncNow().then((did) => { if (did) render(); });
