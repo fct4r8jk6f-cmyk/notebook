@@ -26,7 +26,10 @@
 :root {
   --bg: #F4F6F8; --surface: #FFFFFF; --surface-2: #EFF2F5; --sunk: #E7EBEF;
   --border: #E0E5EA; --border-firm: #CBD3DB;
-  --text: #14181C; --muted: #59636E; --faint: #8B95A1;
+  /* --faint carries the small print: day names, band labels, the rhythm on a
+     bill. It was #8B95A1, which is 2.8:1 on the page — quiet to the point of
+     unreadable. These values clear 4.5:1 on the *page*, not just on a card. */
+  --text: #14181C; --muted: #59636E; --faint: #68717D;
   --accent: #2F6B4F; --accent-soft: #E6F0EA; --accent-ink: #245740;
   --warn: #8A6112; --warn-soft: #FAF0DC;
   --shadow: 0 1px 2px rgba(20, 24, 28, .06), 0 8px 24px rgba(20, 24, 28, .07);
@@ -38,7 +41,7 @@
 :root[data-theme="night"] {
   --bg: #0F1216; --surface: #171B20; --surface-2: #1E232A; --sunk: #23292F;
   --border: #272D34; --border-firm: #38404A;
-  --text: #E8ECF0; --muted: #9AA4AF; --faint: #6C7681;
+  --text: #E8ECF0; --muted: #9AA4AF; --faint: #7C8692;
   --accent: #79C398; --accent-soft: rgba(121, 195, 152, .13); --accent-ink: #9AD6B2;
   --warn: #DFAF64; --warn-soft: rgba(223, 175, 100, .13);
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
@@ -135,6 +138,15 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .row-text { font-size: 16px; line-height: 1.4; flex: 1; cursor: pointer; padding: 6px 0 5px; }
 .rows.small .row-text { font-size: 15px; padding: 6px 0 5px; }
 .pencil .row-text, .pencil .bamt, .pencil .bwhen { color: var(--muted); }
+/* an actual affordance for editing. The name was already tappable, but nothing
+   on screen said so, so bills looked read-only. */
+.editbtn {
+  flex: 0 0 auto; width: 34px; height: 34px; margin: -4px -6px -4px 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--faint);
+}
+.editbtn:hover { background: var(--surface-2); color: var(--text); }
+.editbtn[aria-expanded="true"] { color: var(--accent); }
 .moneytag {
   font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
   border: 1px solid var(--border-firm); border-radius: 999px; padding: 1px 7px; margin-left: 6px;
@@ -277,8 +289,10 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .addform input[type="number"] { width: 92px; }
 .addform .chip { color: #fff; background: var(--accent); border-radius: 999px; padding: 9px 16px; font-weight: 600; font-size: 15px; }
 :root[data-theme="night"] .addform .chip { color: #0F1216; }
-.autolabel { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; color: var(--muted); }
-.autolabel input { width: auto; }
+.autolabel, .lastday { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; color: var(--muted); }
+.autolabel input, .lastday input { width: auto; }
+/* it qualifies the date field, so it sits under it on its own line */
+.lastday { flex-basis: 100%; }
 .chip { font-size: 14px; color: var(--text); background: var(--surface-2); border-radius: 999px; padding: 7px 13px; }
 .chip:hover { background: var(--sunk); }
 .linky { font-size: 14px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
@@ -644,7 +658,10 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 
     for (const it of state.items) {
       if (it.done && it.kind === 'routine') { it.done = false; it.doneAt = null; } // routines reset daily
-      if (it.kind === 'task' && !it.done && it.bucket === 'day' && it.date && it.date < today) {
+      /* scraps carry too. They're dated and they sit on a day, so leaving them
+         behind stranded them on a page nothing shows — an unfinished thing
+         disappearing is the one outcome a notebook must never produce. */
+      if ((it.kind === 'task' || it.kind === 'scrap') && !it.done && it.bucket === 'day' && it.date && it.date < today) {
         it.carried = (it.carried || 0) + 1;
         it.date = today;
         if (it.carried >= 3 && !it.question) {
@@ -675,10 +692,17 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     weekly:      { label: 'every week',      every: { days: 7 } },
     fortnightly: { label: 'every 2 weeks',   every: { days: 14 } },
     monthly:     { label: 'every month',     every: { months: 1 } },
+    bimonthly:   { label: 'every 2 months',  every: { months: 2 } },
     quarterly:   { label: 'every 3 months',  every: { months: 3 } },
+    semiannual:  { label: 'every 6 months',  every: { months: 6 } },
     yearly:      { label: 'every year',      every: { months: 12 } },
     once:        { label: 'one-off',         every: null },
   };
+  /* A monthly bill can land on the last day rather than a fixed number. "Rent
+     on the 31st" is wrong in February and reads wrong everywhere else; LAST_DAY
+     means the end of whatever month it is. */
+  const LAST_DAY = 'last';
+  const LASTDAY_RE = /\b(?:(?:on\s+)?the\s+)?(?:last\s+day|end)\s+of\s+(?:the\s+|each\s+|every\s+)?month\b|\bmonth[-\s]end\b|\beom\b/i;
   NB.CADENCE = CADENCE;
 
   function addMonths(key, n) {
@@ -704,7 +728,8 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     if (isPlainMonthly(it)) {
       if (!b.dueDay) return null;
       const [y, m] = ref.split('-').map(Number);
-      return `${y}-${pad(m)}-${pad(Math.min(b.dueDay, new Date(y, m, 0).getDate()))}`;
+      const dim = new Date(y, m, 0).getDate();
+      return `${y}-${pad(m)}-${pad(b.dueDay === LAST_DAY ? dim : Math.min(Number(b.dueDay), dim))}`;
     }
     if (!b.anchor) return null;
     if (b.anchor > ref) return b.anchor;
@@ -1066,7 +1091,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   /* "every 2 weeks", "biweekly", "quarterly" — the rhythm, said out loud */
 /* "$45 a month" is how people actually write a rhythm, so `a/per <unit>` counts
    too — without it the phrase stayed in the bill's name ("Gym membership a month") */
-  const CADENCE_RE = /\b(?:every\s+(?:other\s+week|2\s+weeks|two\s+weeks|fortnight|week|month|quarter|year|3\s+months|three\s+months|12\s+months)|(?:a|per)\s+(?:week|fortnight|month|quarter|year)|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annual(?:ly)?|one-?off|once)\b/i;
+  const CADENCE_RE = /\b(?:every\s+(?:other\s+(?:week|month)|2\s+weeks|two\s+weeks|2\s+months|two\s+months|6\s+months|six\s+months|fortnight|week|month|quarter|year|3\s+months|three\s+months|12\s+months)|(?:a|per)\s+(?:week|fortnight|month|quarter|year)|bi-?weekly|bi-?monthly|semi-?annual(?:ly)?|half\s+year(?:ly)?|fortnightly|weekly|monthly|quarterly|yearly|annual(?:ly)?|one-?off|once)\b/i;
   function parseCadence(seg) {
     const m = seg.match(CADENCE_RE);
     if (!m) return null;
@@ -1074,6 +1099,9 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     if (/other week|2 weeks|two weeks|fortnight|biweekly|bi weekly/.test(w)) return 'fortnightly';
     if (/week/.test(w)) return 'weekly';
     if (/quarter|3 months|three months/.test(w)) return 'quarterly';
+    /* order matters: "6 months" must be read before the bare "month" below */
+    if (/6 months|six months|semi annual|semiannual|half year/.test(w)) return 'semiannual';
+    if (/2 months|two months|other month|bi monthly|bimonthly/.test(w)) return 'bimonthly';
     if (/year|annual|12 months/.test(w)) return 'yearly';
     if (/month/.test(w)) return 'monthly';
     if (/one off|once/.test(w)) return 'once';
@@ -1127,7 +1155,13 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
           .replace(/\s+(?:on|by|due|for|of|at)\s*$/i, '')
           .replace(/\s{2,}/g, ' ').replace(/[.,;:\s]+$/, '').trim();
         if (tidy) name = tidy;
-        items.push({ kind: 'bill', text: name, quote: seg, date, time: null, amount, cadence: cad, confidence: amount && date ? 'sure' : 'unsure', question: amount ? (date ? null : 'When is it due?') : 'How much is it?' });
+        /* "rent due the last day of the month" is a real rhythm and the 31st is
+           not the same thing — February would move it and the label would lie */
+        const lastDay = LASTDAY_RE.test(seg);
+        /* "the last day of the month" names its own rhythm — don't make the
+           filer guess monthly by default when the sentence already said it */
+        const billCad = cad || (lastDay ? 'monthly' : null);
+        items.push({ kind: 'bill', text: name, quote: seg, date, time: null, amount, cadence: billCad, lastDay, confidence: amount && (date || lastDay) ? 'sure' : 'unsure', question: amount ? (date || lastDay ? null : 'When is it due?') : 'How much is it?' });
         continue;
       }
       if (HEALTH_RE.test(seg) && (date || time)) {
@@ -1173,11 +1207,12 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
             time: { type: ['string', 'null'], description: '24h HH:MM or null.' },
             amount: { type: ['number', 'null'] },
             dir: { type: ['string', 'null'], enum: ['they', 'me', null], description: 'debt only: they owe user, or user owes them.' },
-            cadence: { type: ['string', 'null'], enum: ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'once', null], description: 'bill only: how often it repeats. Default monthly; fortnightly for "every 2 weeks".' },
+            cadence: { type: ['string', 'null'], enum: ['weekly', 'fortnightly', 'monthly', 'bimonthly', 'quarterly', 'semiannual', 'yearly', 'once', null], description: 'bill only: how often it repeats. Default monthly; fortnightly for "every 2 weeks"; bimonthly for "every 2 months"; semiannual for "every 6 months".' },
+            lastDay: { type: ['boolean', 'null'], description: 'bill only: true when it falls on the last day of the month rather than a fixed date.' },
             confidence: { type: 'string', enum: ['sure', 'unsure'] },
             question: { type: ['string', 'null'], description: 'ONE short question if unsure, else null.' },
           },
-          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'cadence', 'confidence', 'question'],
+          required: ['kind', 'text', 'quote', 'date', 'time', 'amount', 'dir', 'cadence', 'lastDay', 'confidence', 'question'],
         },
       },
     },
@@ -1261,7 +1296,7 @@ Rules, non-negotiable:
           bill: {
             amount: r.amount, estimated: r.amount == null || unsure,
             /* monthly keeps a day-of-month; any other rhythm counts from the date itself */
-            dueDay: cad === 'monthly' && due ? Number(due.slice(8)) : null,
+            dueDay: cad === 'monthly' && r.lastDay ? LAST_DAY : cad === 'monthly' && due ? Number(due.slice(8)) : null,
             anchor: cad === 'monthly' ? null : due,
             autopay: false, cadence: cad, paid: {}, since: todayKey(),
           },
@@ -1574,6 +1609,12 @@ Rules, non-negotiable:
     ).join('');
   }
 
+  /* 1st, 2nd, 3rd, 4th … 21st. The teens are the exception that catches people. */
+  function ordinal(n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+    return `${n}${['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+  }
+
   /* ---------------- item rows ---------------- */
   function rowHTML(it, opts) {
     opts = opts || {};
@@ -1626,7 +1667,11 @@ Rules, non-negotiable:
           ${Object.keys(NB.CADENCE).map((c) => `<option value="${c}"${c === NB.billCadence(it) ? ' selected' : ''}>${esc(NB.CADENCE[c].label)}</option>`).join('')}
         </select></label>
         ${NB.billCadence(it) === 'monthly' && !it.bill.anchor
-          ? `<label>due day <input data-edit="dueDay" type="number" min="1" max="31" value="${it.bill.dueDay || ''}" placeholder="?"></label>`
+          ? `<label>due day <select data-edit="dueDay">
+              <option value=""${!it.bill.dueDay ? ' selected' : ''}>—</option>
+              ${Array.from({ length: 31 }, (_, n) => n + 1).map((n) => `<option value="${n}"${String(it.bill.dueDay) === String(n) ? ' selected' : ''}>${ordinal(n)}</option>`).join('')}
+              <option value="last"${it.bill.dueDay === 'last' ? ' selected' : ''}>last day</option>
+            </select></label>`
           : `<label>next due <input data-edit="anchor" type="date" value="${esc(it.bill.anchor || '')}"></label>`}
         <label class="autolabel"><input data-edit="autopay" type="checkbox" ${it.bill.autopay ? 'checked' : ''}> autopay</label>
       </div>` : '';
@@ -1835,8 +1880,10 @@ Rules, non-negotiable:
       const open = expandedId === b.id;
       const amber = du != null && du <= 0 ? 'due-now' : du != null && du <= 3 ? 'due-soon' : '';
       const dueTxt = due ? (du < 0 ? `was due ${esc(D.dayName(due, true))} — still open` : du === 0 ? 'due today' : `${esc(D.dayName(due, true))} ${Number(due.slice(8))}`) : '—';
-      /* "every month" on every line is noise — only name the unusual rhythms */
-      const cad = NB.billCadence(b) === 'monthly' ? '' : NB.cadenceLabel(b);
+      /* "every month" on every line is noise — only name the unusual rhythms.
+         "last day" earns its place though: it's why the date moves each month. */
+      const cad = [NB.billCadence(b) === 'monthly' ? '' : NB.cadenceLabel(b), b.bill.dueDay === 'last' ? 'last day' : '']
+        .filter(Boolean).join(' · ');
       return `
       <div class="brow ${amber} ${b.bill.autopay ? 'is-auto' : ''} ${!b.ink ? 'pencil' : ''}" data-id="${b.id}">
         <div class="row-main">
@@ -1844,6 +1891,7 @@ Rules, non-negotiable:
           <button class="tick" data-act="paybill" type="button" aria-label="mark paid"></button>
           <span class="row-text hand" data-act="open">${esc(b.text)}${b.bill.autopay ? '<span class="autotag fig">AUTOPAY</span>' : ''}</span>
           <span class="bamt fig ${b.bill.estimated ? 'est' : ''}">${b.bill.amount != null ? (b.bill.estimated ? '~' : '') + '$' + NB.fmtAmt(b.bill.amount) : '$?'}</span>
+          <button type="button" class="editbtn" data-act="open" aria-label="Edit ${esc(b.text)}" aria-expanded="${open}">✎</button>
         </div>
         ${due || cad ? `<div class="bmeta"><span class="bwhen fig">${due ? dueTxt : ''}</span>${cad ? `<span class="bevery fig">${esc(cad)}</span>` : ''}</div>` : ''}
         ${b.question ? stickyHTML(b) : ''}
@@ -1875,6 +1923,7 @@ Rules, non-negotiable:
           ${Object.keys(NB.CADENCE).map((c) => `<option value="${c}"${c === 'monthly' ? ' selected' : ''}>${esc(NB.CADENCE[c].label)}</option>`).join('')}
         </select>
         <input name="first" type="date" aria-label="first due date">
+        <label class="lastday"><input name="lastday" type="checkbox"> last day of the month</label>
         <label class="autolabel"><input name="autopay" type="checkbox"> auto</label>
         <button type="submit" class="chip">Add bill</button>
       </form>
@@ -1958,6 +2007,34 @@ Rules, non-negotiable:
     const v = { today: todayView, week: weekView, money: moneyView, notes: notesView, done: doneView }[view] || todayView;
     $('#page').innerHTML = v();
     $('#page').dataset.view = view;
+  }
+
+  /* A redraw fired from inside an event that is still being dispatched tears
+     out the node the browser is mid-way through moving focus to, and innerHTML
+     throws "the node to be removed is no longer a child of this node". A
+     `change` on a typed field fires exactly there — as focus leaves it. So let
+     the event finish, then redraw, and put the cursor back where it was: the
+     detail card is rebuilt wholesale, and without this you lose your place
+     after every single field you edit. */
+  let renderQueued = false;
+  function queueRender(anchor) {
+    if (renderQueued) return;
+    renderQueued = true;
+    /* anchor on the field that changed, not on document.activeElement: `change`
+       fires during blur, so by now focus has already left and activeElement is
+       the body. */
+    const row = anchor && anchor.closest('[data-id]');
+    const spot = row ? { id: row.dataset.id, edit: anchor.dataset.edit } : null;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      render();
+      /* only put focus back if the redraw dropped it on the floor — if the user
+         tabbed on to something real, leave them there */
+      const now = document.activeElement;
+      if (!spot || (now && now !== document.body && now.closest && now.closest('[data-edit]'))) return;
+      const back = document.querySelector(`[data-id="${spot.id}"] [data-edit="${spot.edit}"]`);
+      if (back) { back.focus(); if (back.setSelectionRange && back.type === 'text') back.setSelectionRange(back.value.length, back.value.length); }
+    });
   }
 
   /* ---------------- dump & sort ---------------- */
@@ -2234,7 +2311,10 @@ Rules, non-negotiable:
       const f = ed.dataset.edit;
       if (f === 'text') { it.text = ed.value.trim() || it.text; if (it.source) it.source.edited = true; }
       if (f === 'amount' && it.bill) { it.bill.amount = ed.value === '' ? null : Number(ed.value); it.bill.estimated = false; it.ink = true; }
-      if (f === 'dueDay' && it.bill) { it.bill.dueDay = ed.value === '' ? null : Math.max(1, Math.min(31, Number(ed.value))); }
+      if (f === 'dueDay' && it.bill) {
+        it.bill.dueDay = ed.value === '' ? null : ed.value === 'last' ? 'last' : Math.max(1, Math.min(31, Number(ed.value)));
+        it.ink = true; it.question = null;
+      }
       if (f === 'anchor' && it.bill) { it.bill.anchor = /^\d{4}-\d{2}-\d{2}$/.test(ed.value) ? ed.value : null; it.ink = true; it.question = null; }
       if (f === 'cadence' && it.bill) {
         /* read the next due date while the OLD rhythm still applies, so changing
@@ -2254,7 +2334,7 @@ Rules, non-negotiable:
       if (f === 'autopay' && it.bill) { it.bill.autopay = ed.checked; }
       if (f === 'expires' && it.renewal) { it.renewal.expires = ed.value || null; it.ink = true; it.question = null; }
       NB.save();
-      if (f !== 'text') render();   /* don't tear down the DOM while the text field has focus */
+      if (f !== 'text') queueRender(ed);
       return;
     }
     const st = e.target.closest('[data-set]');
@@ -2320,9 +2400,10 @@ Rules, non-negotiable:
         const first = /^\d{4}-\d{2}-\d{2}$/.test(fd.get('first') || '') ? fd.get('first') : null;
         /* monthly keeps a plain day-of-month; every other rhythm counts from a date */
         const plain = cad === 'monthly';
+        const lastDay = plain && !!fd.get('lastday');
         NB.addItem({ kind: 'bill', text: fd.get('name'), source: src, bill: {
           amount: fd.get('amount') ? Number(fd.get('amount')) : null, estimated: !fd.get('amount'),
-          dueDay: plain && first ? Number(first.slice(8)) : null,
+          dueDay: lastDay ? 'last' : plain && first ? Number(first.slice(8)) : null,
           anchor: plain ? null : first,
           autopay: !!fd.get('autopay'), cadence: cad, paid: {}, since: NB.dates.todayKey(),
         } });

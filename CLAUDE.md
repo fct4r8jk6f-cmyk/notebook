@@ -172,14 +172,26 @@ forgotten, so it's deliberately not there.
 
 ## Bill rhythms
 
-Bills repeat on a `cadence`: `weekly · fortnightly · monthly · quarterly ·
-yearly · once` (see `CADENCE`). Two shapes exist and the distinction matters:
+Bills repeat on a `cadence`: `weekly · fortnightly · monthly · bimonthly ·
+quarterly · semiannual · yearly · once` (see `CADENCE`). Two shapes exist and
+the distinction matters:
 
 - **Plain monthly** — `dueDay` (day-of-month), `anchor: null`. Paid keys are
   `YYYY-MM`. This is what every bill looked like before cadences, so notebooks
   written then keep every tick. `isPlainMonthly()` is the test.
 - **Everything else** — an `anchor` date, one known occurrence. Paid keys are
   the occurrence date itself (`YYYY-MM-DD`).
+
+`dueDay` is a number **or the string `LAST_DAY` (`'last'`)**, meaning the end of
+whatever month it is — Feb 28, Apr 30, Jan 31. Don't collapse it to `31`: that
+clamps to 28 in February and then the label lies about the rhythm. Anything
+comparing `dueDay` numerically has to handle the sentinel (`billOccurrence`
+does). `LASTDAY_RE` reads it out of a dump ("last day of the month", "month
+end", "eom") and it implies `monthly` on its own, so the filer isn't left
+guessing a rhythm the sentence already gave.
+
+`parseCadence` checks `6 months` and `2 months` **before** the bare `month`
+branch — otherwise "every 6 months" files as monthly.
 
 `billNth(it, n)` always measures from the anchor, never by stepping the previous
 result: a month-end date clamped once (Nov 31 → Nov 30) would otherwise keep the
@@ -233,6 +245,11 @@ kind without a page to show it on.
 overflowed everywhere and hid Sunday behind a scrollbar phones don't draw. Don't
 reintroduce a horizontal week without widening `.app` first.
 
+Bills, renewals and debts are edited in place: tapping the row's `✎` (or its
+name) expands `detailHTML`, which live-saves each field on `change`. The pencil
+exists because the name alone was tappable with nothing on screen saying so, so
+bills read as immutable. Any row that can be edited needs a visible affordance.
+
 Rendering is full-redraw string templating: each view returns an HTML string,
 `render()` swaps `#page.innerHTML`, `renderTabs()` swaps the nav. No virtual DOM,
 no incremental patching. **Always `esc()` user text** — it goes straight into
@@ -258,6 +275,10 @@ the circle instead would shout; shrinking the button loses the tap.
 - `rollover()` carries unfinished items forward and bumps `carried`. It runs at
   boot, on tab-focus, and on a 60s interval, because an installed PWA can stay
   open across midnight for days. Don't assume boot-only.
+- It carries **`task` and `scrap`** — both are dated and both sit on a day, so
+  leaving scraps behind stranded them on a page nothing renders. An unfinished
+  thing quietly disappearing is the one outcome a notebook must never produce.
+  Dated `health` items deliberately don't move: an appointment isn't a to-do.
 
 ## Voice and design
 
@@ -312,6 +333,16 @@ completes.
   `prompt`/`confirm` anywhere in this app.
 - The jot placeholder uses `--muted`, not `--faint`. It's the only thing telling
   you the line is writable, and `--faint` on the field clears barely 2.9:1.
+- **Never call `render()` from inside a `change` handler** — use `queueRender(ed)`.
+  A `change` on a typed field fires *during* blur, so a synchronous redraw rips
+  out the node the browser is still moving focus to and `innerHTML` throws "the
+  node to be removed is no longer a child of this node". `queueRender` defers to
+  the next frame and puts focus back on the field that changed, but only if the
+  redraw dropped it on the floor — if you tabbed on to something real, you stay
+  there.
+- `--faint` clears 4.5:1 **on the page background**, not just on a card. It was
+  #8B95A1 (2.8:1 on `--bg`) and it carries all the small print — day names, band
+  labels, a bill's rhythm. If you lighten it, measure it against `--bg`.
 - `.whisper` needs `width: max-content` before its `max-width`. Without it the
   toast stretches the full clamp and one short word wraps oddly mid-phrase.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`
