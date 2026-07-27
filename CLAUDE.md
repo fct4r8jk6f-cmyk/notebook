@@ -77,6 +77,9 @@ assigns).
 - `doneKey` is the **local** day something was ticked, and it's what the Done
   page groups by. `doneAt` is an ISO instant — don't group by `doneAt.slice(0,10)`,
   that's the UTC day and lands things under the wrong heading after teatime.
+  `dayItems().done` groups by it too, so **clear `doneKey` on every un-tick** or
+  the item keeps showing as done under that day. There are two un-tick paths
+  (`tick()` and the `restore` action) and both have to do it.
 
 ## The two brains
 
@@ -245,6 +248,18 @@ kind without a page to show it on.
 overflowed everywhere and hid Sunday behind a scrollbar phones don't draw. Don't
 reintroduce a horizontal week without widening `.app` first.
 
+**A ticked thing stays on its day, struck through.** `dayItems(key)` returns a
+`done` bucket alongside `timed / tasks / carried / echoes`; Today renders it as a
+"done today · n" band under the jot line, and each Week day appends it to the
+bottom of the card. Ticking again puts the item straight back on the open list.
+They used to vanish to the Done page the instant you ticked them, which read as
+the notebook eating your work — a list you can't see the end of is not a list.
+The Done page is unchanged and still earns its place: it's the history *across*
+days, not today's page.
+
+Because of that, "nothing here" and "all of it done" are different empty states.
+Don't tell someone who just cleared their list that they haven't started.
+
 Bills, renewals and debts are edited in place: tapping the row's `✎` (or its
 name) expands `detailHTML`, which live-saves each field on `change`. The pencil
 exists because the name alone was tappable with nothing on screen saying so, so
@@ -343,6 +358,16 @@ completes.
 - `--faint` clears 4.5:1 **on the page background**, not just on a card. It was
   #8B95A1 (2.8:1 on `--bg`) and it carries all the small print — day names, band
   labels, a bill's rhythm. If you lighten it, measure it against `--bg`.
+- **Don't fade text with `opacity` to say "secondary".** It multiplies with
+  whatever colour is already there: `.day.is-past` at `.6` dragged the day name
+  to 2.4:1, and an `.8` on a done row put struck `--faint` text at 3.3:1. A past
+  day recedes with a transparent background and a dashed border instead. Use a
+  token, not a fade — and note `getComputedStyle(el).color` never shows an
+  ancestor's opacity, so a contrast check that ignores it reads clean.
+- `fmtTime` puts the time in the row's own chip, so `stripTime()` takes it back
+  out of the label — otherwise every timed row reads "🕕 6pm  gym at 6pm". It's
+  only called when `parseWhen` actually found a time, and it keeps the original
+  if stripping would empty it.
 - `.whisper` needs `width: max-content` before its `max-width`. Without it the
   toast stretches the full clamp and one short word wraps oddly mid-phrase.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`

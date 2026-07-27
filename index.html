@@ -175,6 +175,12 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .tick.checked, .rows .is-done .tick { color: var(--surface); }
 :root[data-theme="night"] .tick.checked, :root[data-theme="night"] .rows .is-done .tick { color: #0F1216; }
 .is-done .row-text, .handled .row-text { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* the day's finished pile: present, legible, and clearly settled. Tick again to
+   put something back — the circle stays live. */
+.donelist { margin-top: 22px; }
+.donelist .row { border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent); }
+/* no opacity on a done row: it stacks with --faint and lands at 3.3:1. The
+   strike-through and the quieter ink already say "handled". */
 .carry { font-size: 12px; color: var(--faint); }
 .ink { color: inherit; }
 .timechip {
@@ -200,7 +206,9 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .weekscroll { padding: 0; }
 .week { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; }
 .day { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px 8px; min-height: 0; position: relative; }
-.day.is-past { opacity: .6; }
+/* a past day recedes by sitting back into the page, not by fading its text:
+   opacity: .6 dragged the day name down to 2.4:1 and the rows with it */
+.day.is-past { background: transparent; border-style: dashed; }
 .day.is-today { border-color: var(--accent); box-shadow: var(--shadow-sm); }
 .day.is-today::before { display: none; }
 .dayhead { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
@@ -952,9 +960,19 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 
   /* Everything that belongs on a given day column (front-of-book + echoes). */
   function dayItems(key) {
-    const out = { timed: [], tasks: [], echoes: [], carried: [] };
+    const out = { timed: [], tasks: [], echoes: [], carried: [], done: [] };
     for (const it of state.items) {
-      if (it.done && it.kind !== 'routine') continue;
+      if (it.done && it.kind !== 'routine') {
+        /* Ticked things stay on the day they were ticked, struck through, so
+           the page shows what you got done and not just what's left. They used
+           to vanish to the Done page the instant you ticked them, which read
+           as the notebook eating your work.
+           Grouped by `doneKey` — the local day you ticked it — because that's
+           what "what I did today" means. A task written Monday and ticked
+           Tuesday belongs under Tuesday. */
+        if (['task', 'scrap', 'health'].includes(it.kind) && it.doneKey === key) out.done.push(it);
+        continue;
+      }
       if ((it.kind === 'task' || it.kind === 'scrap') && it.bucket === 'day' && it.date === key) {
         if (it.carried > 0) out.carried.push(it);
         else if (it.time) out.timed.push(it);
@@ -975,6 +993,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       }
     }
     out.timed.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    out.done.sort((a, b) => (a.doneAt || '').localeCompare(b.doneAt || ''));
     return out;
   }
   NB.dayItems = dayItems;
@@ -997,6 +1016,19 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   const HEALTH_RE = /\b(doctor|dentist|dr\.?\s|appointment|prescription|refill|check-?up|physio|therapist|meds)\b/i;
   const ROUTINE_RE = /\bevery (day|morning|night|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b|\bdaily\b/i;
 
+  /* The row prints the time as its own chip, so a label that repeats it reads
+     as a stutter: "🕕 6pm  gym at 6pm". Only ever called when parseWhen found a
+     time, and it keeps the original if stripping would leave nothing. */
+  function stripTime(s) {
+    const out = s
+      .replace(/\b(?:at|by|from)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i, ' ')
+      .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/i, ' ')
+      .replace(/\b\d{1,2}\s*(?:am|pm)\b/i, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/[\s,;:-]+$/, '')
+      .trim();
+    return out || s;
+  }
   function parseWhen(text) {
     const t = text.toLowerCase();
     const today = todayKey();
@@ -1048,7 +1080,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     }
     return { date, time };
   }
-  NB.parseWhen = parseWhen;
+  NB.parseWhen = parseWhen; NB.stripTime = stripTime;
 
   /* Money, the way people actually dump it. A literal $ is the strongest signal,
      but almost nobody types one — "electric bill 142.50", "dave owes me 60 bucks",
@@ -1165,7 +1197,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
         continue;
       }
       if (HEALTH_RE.test(seg) && (date || time)) {
-        items.push({ kind: 'health', text: title, quote: seg, date, time, amount: null, confidence: 'sure', question: null });
+        items.push({ kind: 'health', text: time ? stripTime(title) : title, quote: seg, date, time, amount: null, confidence: 'sure', question: null });
         continue;
       }
       if (GOAL_RE.test(seg)) {
@@ -1178,7 +1210,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       }
       if (imperative || (date && seg.split(' ').length <= 10)) {
         const routine = ROUTINE_RE.test(seg);
-        items.push({ kind: routine ? 'routine' : 'task', text: title, quote: seg, date, time, amount, confidence: 'sure', question: null });
+        items.push({ kind: routine ? 'routine' : 'task', text: time ? stripTime(title) : title, quote: seg, date, time, amount, confidence: 'sure', question: null });
         continue;
       }
       if (/\b(idea|what if|should try|would be cool)\b/i.test(seg)) {
@@ -1717,7 +1749,14 @@ Rules, non-negotiable:
         </div>`;
 
     const echoes = d.echoes.map(echoHTML).join('');
-    const nothing = d.timed.length + d.tasks.length + d.carried.length + d.echoes.length === 0;
+    const open = d.timed.length + d.tasks.length + d.carried.length + d.echoes.length;
+    /* "nothing yet" and "all of it done" are different days — don't tell someone
+       who just cleared their list that they haven't started */
+    const empty = open === 0
+      ? d.done.length
+        ? emptyLine(`That's everything for today — ${d.done.length} down.`)
+        : emptyLine('Nothing on the list yet. Write one below, or tap Add to paste a whole brain-dump and let it sort itself.')
+      : '';
     return `
       ${pageTitle('Today', esc(D.dayName(t)) )}
       ${brief}
@@ -1727,8 +1766,12 @@ Rules, non-negotiable:
         ${d.tasks.map((i) => rowHTML(i)).join('')}
         ${d.carried.map((i) => rowHTML(i)).join('')}
       </div>
-      ${nothing ? emptyLine('Nothing on the list yet. Write one below, or tap Add to paste a whole brain-dump and let it sort itself.') : ''}
+      ${empty}
       ${jotHTML(t, 'Add to today')}
+      ${d.done.length ? `<div class="band donelist">
+        <span class="band-label fig">done today · ${d.done.length}</span>
+        <div class="rows">${d.done.map((i) => rowHTML(i)).join('')}</div>
+      </div>` : ''}
       ${routines.length ? `<div class="routines"><span class="r-label fig">keeping up</span>${routines.map((r) => `<button type="button" class="rchip hand ${r.done ? 'rdone' : ''}" data-id="${r.id}" data-act="tick">${r.done ? '●' : '○'} ${esc(r.text)}</button>`).join('')}</div>` : ''}
       ${parked.length ? `<div class="tray"><span class="tray-label hand">✎ a quick word?</span>${parked.map((i) => rowHTML(i)).join('')}</div>` : ''}
     `;
@@ -1767,12 +1810,14 @@ Rules, non-negotiable:
       const d = NB.dayItems(key);
       const isToday = key === t;
       const isPast = key < t;
-      const all = [...d.timed, ...d.echoes.map((e) => e), ...d.tasks, ...d.carried];
+      /* ticked things sit at the bottom of their day, struck through — a past
+         day showing an empty card when you cleared it read as "you did nothing" */
       const rows = [
         ...d.timed.map((i) => rowHTML(i)),
         ...d.echoes.map(echoHTML),
         ...d.tasks.map((i) => rowHTML(i)),
         ...d.carried.map((i) => rowHTML(i)),
+        ...d.done.map((i) => rowHTML(i)),
       ].join('');
       return `
       <section class="day ${isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}">
@@ -2202,7 +2247,9 @@ Rules, non-negotiable:
       NB.withUndo(it.done ? 'Un-filled. It happens.' : 'Kept up. Quietly noted.', () => { it.done = !it.done; it.doneAt = it.done ? new Date().toISOString() : null; });
       return;
     }
-    if (it.done) { NB.withUndo('Back on the page.', () => { it.done = false; it.doneAt = null; }); return; }
+    /* clear doneKey too — the day pages group the struck-through list by it, so
+       leaving it behind keeps an un-ticked item showing as done */
+    if (it.done) { NB.withUndo('Back on the page.', () => { it.done = false; it.doneAt = null; it.doneKey = null; }); return; }
     NB.withUndo(tickLabel(it), () => { it.done = true; it.doneAt = new Date().toISOString(); it.doneKey = D.todayKey(); it.question = null; });
   }
   function tickLabel(it) {
@@ -2296,7 +2343,7 @@ Rules, non-negotiable:
     if (a === 'paybill') { payBill(it); render(); return; }
     if (a === 'open') { expandedId = expandedId === it.id ? null : it.id; render(); return; }
     if (a === 'toss') { NB.withUndo('Tossed.', () => NB.removeItem(it.id)); expandedId = null; render(); return; }
-    if (a === 'restore') { NB.withUndo('Back on the page.', () => { it.done = false; it.doneAt = null; }); render(); return; }
+    if (a === 'restore') { NB.withUndo('Back on the page.', () => { it.done = false; it.doneAt = null; it.doneKey = null; }); render(); return; }
     if (a === 'answer') { NB.answerQuestion(it.id, act.dataset.answer); render(); return; }
     if (a === 'when') { whenAct(it, act.dataset.when); render(); return; }
   });
@@ -2385,7 +2432,7 @@ Rules, non-negotiable:
          typed into, not from anything in the words */
       const { time } = NB.parseWhen(text);
       NB.withUndo('On the list.', () => {
-        NB.addItem({ kind: 'task', text, date: form.dataset.date, time, bucket: 'day', source: { quote: text, at: src.at, via: 'jot' } });
+        NB.addItem({ kind: 'task', text: time ? NB.stripTime(text) : text, date: form.dataset.date, time, bucket: 'day', source: { quote: text, at: src.at, via: 'jot' } });
       });
       render();
       /* the redraw destroys the field, so put the cursor back on the new one —
