@@ -27,7 +27,7 @@ To run it: open `index.html` in a browser. That's the whole dev loop.
 | --- | --- |
 | 1–15 | `<head>`, PWA meta, base64 SVG icons |
 | 16–~430 | `<style>` — the entire visual system |
-| ~430–465 | `<body>` markup — header, ribbon, `#page`, `#tabs`, `#overlay`, `#whisper`, grain |
+| ~430–465 | `<body>` markup — header (brand, ask, settings, Add), `#page`, `#tabs`, `#overlay`, `#whisper` |
 | ~468–1180 | `<script>` **core.js** — store, item model, the two brains, the brief |
 | ~1180–1960 | `<script>` **ui.js** — rendering, views, overlays, event wiring, `boot()` |
 | tail | runtime-generated web app manifest (so Android offers a real install) |
@@ -58,8 +58,11 @@ assigns).
 
 - **kinds**: `task · bill · goal · idea · renewal · debt · health · routine · scrap`
 - **bucket**: `day | week | next-week | someday | goals | ideas`
-- `sample: true` marks the watermark seed items — `clearSamples()` deletes all of
-  them the moment the first real dump lands. Seeds must never survive real use.
+- `sample` survives only as a field. **The notebook no longer seeds itself** —
+  `seed()` is gone. A new book opens empty with a line telling you what to do,
+  because pre-filled fake entries read as someone else's notes and had to be
+  cleared before the app was usable. Don't reintroduce them. `clearSamples()`
+  still runs, so any book that already carries seeds sheds them on first dump.
 - `question` parks an item as a sticky asking the user something; answering it
   runs an `act` (see `answerQuestion` / `actLabel`).
 - `touched` is an ISO instant stamped centrally in `flush()` by diffing each
@@ -74,7 +77,7 @@ assigns).
 
 `extract(text)` is the entry point. It picks:
 
-The model is chosen in the flyleaf from `MODELS` (Opus 5 default, Sonnet 5,
+The model is chosen in Settings from `MODELS` (Opus 5 default, Sonnet 5,
 Haiku 4.5); `DEFAULT_MODEL` is the head of that list. **These models think by
 default and `max_tokens` caps thinking *and* the reply together** — that's why
 extraction asks for 8000 and the Desk 2000, not the 2000/300 they used before.
@@ -92,20 +95,37 @@ moves notebooks off the superseded default.
    the key is optional and the app has to be fully usable without one.
 
 `parseAmount(seg, moneyish)` reads `$1,200`, `60 bucks`, a bare `142.50`, and —
-only in a bill/debt sentence — a bare number, after date fragments are stripped
+only in a *priced* sentence — a bare number, after date fragments are stripped
 so `due the 8th` isn't read as `$8`. It trusts a bare number only when exactly
 one survives that stripping. Widen it carefully: every loosening risks reading a
 date, a time or a quantity as money.
 
+`stripWhen(s)` holds those date/time patterns in one place. `parseAmount` uses it
+so a due date isn't read as money, and the bill titler uses it so a bill isn't
+named after its own due date (`"rent 1200 monthly on the 1st"` → **Rent**, not
+"Rent 1200 on the 1st" sitting next to a `$1,200` in the same row).
+
+**A price plus a rhythm or a due date is a bill, whatever it's called.** The bill
+branch used to require a word from `BILL_WORDS`/`PAY_WORDS`, so
+`spotify 11.99 monthly` matched nothing and fell through to the chatter fallback
+— which files nothing. Typed money vanished. `priced` (a cadence or the word
+"due") now opens the branch on its own, and it's the reason `parseAmount` is
+allowed to trust a bare number there.
+
 Segment order in `localExtract` is significant — the first matching branch wins.
 `insurance` is in both `BILL_WORDS` and `RENEWAL_RE`, so the renewal branch
-explicitly stands aside when there's an amount.
+explicitly stands aside when there's an amount. Debt is read before both, which
+is what keeps `i lent sam 75 due friday` out of Bills.
+
+`I_OWE_RE` vs `THEY_OWE_RE` turn on the name in the middle: `pay me back` is owed
+*to* you, `pay mike back` is owed *by* you. The lookahead excluding `me|us` is
+what separates them — don't collapse it.
 
 The API key is stored in localStorage on the device only, is never sent
 anywhere but Anthropic, and is stripped from `NB.exportJSON()` and preserved
 (not overwritten) on import. Keep all three of those properties.
 
-`askDesk(question)` is the ribbon/chat path — same API, feeds it
+`askDesk(question)` is the ask (`✦`) path — same API, feeds it
 `notebookDigest()` as context. Key-gated for the *reply*, but it always runs
 `search()` locally, so it stays useful without a key.
 
@@ -165,15 +185,37 @@ loop that adds a month to the last result.
 occurrences — a fortnightly bill lands twice in most months, and a weekly bill
 ticked once is not ticked four times. Never total a bill as `amount × 1`.
 
+`bill.since` is the day the bill was written down, and **nothing is owed for a
+cycle that ended before it**. Writing "rent on the 1st" on the 27th used to
+surface instantly as *"was due Wed — still open"* for a rent that was never
+recorded, and counted against the month's total. `billDueDate` skips occurrences
+before `since`, and `billOccurrencesInMonth` doesn't count them. Bills in
+notebooks written before `since` existed have none, and `billSince()` returning
+`null` deliberately preserves their old behaviour rather than silently dropping
+a cycle they may have ticked.
+
 Changing a bill's cadence resets `paid` (a cycle means something different
 afterwards) and carries the date across by reading `billDueDate` *before*
-switching.
+switching. `since` is left alone — it records when you wrote the bill down, not
+what rhythm it's on.
 
 ## Views
 
-Tabs: `today · week · goals · ideas · done · back`. "Back Pages" holds the
-sub-pages: Bills, Renewals, Owed, Health — and shows a dot when any of those has
-a parked question.
+Five tabs: `today · week · money · notes · done`. Two of them group what used to
+be scattered across a ten-destination nav:
+
+- **Money** → Bills · Owed · Renewals (`MONEY_TABS`, state in `backTab`)
+- **Notes** → Ideas · Goals · Health (`NOTES_TABS`, state in `notesTab`)
+
+Both render through the same `grouped(tabs, current)` helper, which draws a
+horizontal segmented control above the page and looks the sub-page up in `PAGES`.
+Adding a sub-page means adding to the list and to `PAGES` — nothing else. A tab
+shows a dot when one of its sub-pages has a parked question.
+
+This replaced `today · week · goals · ideas · done · back` plus a rotated
+vertical rail of back pages. Ten destinations for a notebook is a menu, not a
+notebook; the rail in particular was unreadable sideways and unhittable on a
+phone. Don't grow the top row back past five.
 
 There is no People page. It was removed along with the `person` kind and
 birthday extraction; `migrate()` in `load()` turns any surviving `person` item
@@ -192,7 +234,15 @@ no incremental patching. **Always `esc()` user text** — it goes straight into
 `innerHTML`.
 
 Events are delegated from the container down (`data-act`, `data-view`,
-`data-set` attributes), not bound per-row — rows are destroyed on every render.
+`data-set`, `data-backtab`, `data-notestab` attributes), not bound per-row —
+rows are destroyed on every render.
+
+**Touch targets are measured, not eyeballed.** Every control clears 32px each
+way, and the header buttons clear 44. `.tick` is the pattern to copy: the button
+is 34px so a thumb lands, and the 21px circle you actually see is an absolutely
+positioned `::before` behind the `✓` (`isolation: isolate` on the button is what
+keeps the circle *behind* the tick mark rather than painted over it). Enlarging
+the circle instead would shout; shrinking the button loses the tap.
 
 ## Time
 
@@ -208,16 +258,27 @@ Events are delegated from the container down (`data-act`, `data-view`,
 
 Read the CSS banner comment before touching styles. The system is deliberate:
 
-- Fonts: **Shantell Sans** (the working hand), **Caveat** (display), **Source
-  Sans 3** (figures/numbers). `.hand` and `.fig` classes carry them. `plainHand`
-  setting swaps the hand for print.
-- Themes: `daylight` and `lamplight` (`:root[data-theme="night"]`), plus `auto`.
-  Every colour is a CSS custom property — add tokens, don't hardcode hex.
-- **No red anywhere.** Amber is the heads-up, heavier ink is urgency. Guilt is
-  not a colour. Overdue things get weight, not alarm.
-- Copy is warm, lowercase-ish, and physical: the flyleaf (settings), the ribbon
-  (chat), the dump, whispers, stickies, back pages. Match it — no "Error:", no
-  "Are you sure?", no exclamation marks.
+- **One typeface: Source Sans 3** (400/600), and it is the *only* thing embedded.
+  `--hand`, `--disp` and `--fig` all resolve to it, so the existing `.hand` /
+  `.fig` classes still work and simply render as one clean face. Shantell Sans
+  and Caveat are gone — five `@font-face` blocks of base64 that took the file
+  from 700KB to 200KB when removed, and made every list read like a ransom note.
+  `plainHand` is kept as a setting but no longer has two faces to swap between.
+- **No skeuomorphism.** No paper grain, no tape, no rotation, no dog-ears —
+  `.pen`, `.penline`, `.flourish`, `.dogear`, `.clip` and `.grain` are all
+  `display: none` on purpose. They read as clutter, not as paper.
+- Themes: `day` and `night` (`:root[data-theme="night"]`), plus `auto`.
+  `applyTheme()` writes the attribute; every colour is a CSS custom property —
+  add tokens, don't hardcode hex.
+- **No red anywhere.** Amber (`--warn`) is the heads-up, heavier ink is urgency.
+  Guilt is not a colour. Overdue things get weight, not alarm.
+- Copy is plain and calm — "Settings", "Add", "Ask your notebook", "Add bill".
+  The old private vocabulary (the flyleaf, the ribbon, the desk, back pages, "rule
+  the line") meant nothing to anyone opening the app for the first time. Warmth
+  stays in the whispers and the brief; the *labels* say what they do. No "Error:",
+  no "Are you sure?", no exclamation marks.
+- Empty states say what to do next, since the notebook no longer arrives
+  pre-filled. An empty page with no instruction is the app's worst first screen.
 
 Destructive actions go through `withUndo(label, fn)`, which snapshots items and
 shows a 6-second whisper with undo. Use it for anything that removes or
@@ -231,21 +292,27 @@ completes.
   out, `backdrop-filter: blur(3px)` covers the viewport, and every tap on the app
   is swallowed. Don't remove it; don't add another `display` rule to a
   `[hidden]`-toggled element without an `!important` guard.
-- The fixed `.ribbon` (26px wide, `z-index: 30`) sits in the top-right corner
-  above the chrome. `.chrome` reserves 48px of right padding to clear it —
-  without that the ribbon overlaps the dump button and silently eats its taps.
-  Anything else placed top-right needs the same clearance.
+- The ask button (`#ribbon`) is now an ordinary 44px button in the header flow,
+  not a fixed bookmark hanging off the corner. As a fixed element at `z-index: 30`
+  it sat over the Add button and silently ate its taps — `elementFromPoint`
+  returned the ribbon, and nothing on screen showed why. Anything placed top-right
+  needs to be *in* `.chrome`, not floated above it.
 - `.addday` (the per-day `+`) reveals on `:hover`, which no touch screen has;
-  the `@media (hover: none)` block keeps it visible. Watch for the same trap
-  with any other hover-only affordance.
+  the `@media (hover: none)` block keeps it visible. It's also full-width of the
+  day card — an 11px glyph is a target no thumb hits. Watch for the same two
+  traps with any other hover-only affordance.
+- `.whisper` needs `width: max-content` before its `max-width`. Without it the
+  toast stretches the full clamp and one short word wraps oddly mid-phrase.
 - The manifest is built at runtime from a Blob URL — there is no `manifest.json`
   file, on purpose.
 - `sw.js` caches the app shell, network-first: merging deploys through Pages,
   and a cache-first worker would serve a stale notebook to someone online. It
   handles same-origin GET navigations only — never the Anthropic API, since a
   cached POST reply would be a stale sort. The page has no other network
-  dependency (fonts are base64, icons are data URIs, the manifest is a blob),
+  dependency (the font is base64, icons are data URIs, the manifest is a blob),
   so the shell is the whole cache.
+- `fmtAmt` prints cents only when there are cents. `$142.5` reads like a typo;
+  `$1,200` with a forced `.00` reads like a spreadsheet.
 - Share-target text arrives as `?title=&text=&url=` query params at boot and
   opens the dump prefilled; `history.replaceState` clears it.
 
@@ -258,12 +325,23 @@ completes.
   it (`git fetch origin main && git checkout -B <branch> origin/main`). No need
   to ask first — the owner wants it merged and pulled. Merging deploys, since
   Pages builds off `main`.
-- Since there are no tests, verify by opening the file in a browser and
-  exercising the path you changed — dump something, check the tab it lands in,
-  toggle both themes.
-- Layout claims need measuring, not eyeballing. Two of the bugs above
+- There is no test runner in the repo (that would be a toolchain). Verify by
+  opening the file in a browser and exercising the path you changed — add
+  something, check the tab it lands in, toggle both themes. Driving it with
+  Playwright from a scratch directory is the practical way to do that at scale;
+  the suites live outside the repo on purpose.
+- Layout claims need measuring, not eyeballing. Three of the bugs above
   (`elementFromPoint` returning the ribbon over the dump button; `.weekscroll`
-  at 346px holding a 940px grid) were invisible in a screenshot and obvious in
-  a `getBoundingClientRect` dump. Check at 390px wide, not just desktop.
+  at 346px holding a 940px grid; every tick being a 21px target) were invisible
+  in a screenshot and obvious in a `getBoundingClientRect` dump. Check at 390px
+  wide, not just desktop.
+- **Verify the theme actually applied.** `addInitScript` re-runs on every
+  navigation, so a theme set at runtime is wiped by the next reload and the
+  "dark" screenshots come back light. Seed it into the stored blob and assert on
+  `document.documentElement.dataset.theme` before believing a screenshot.
+- Exercise the real filing path (`NB.fileExtraction`), not `NB.addItem` on raw
+  extractor output. `addItem` skips the bill/renewal/debt shaping, and every money
+  page filters on those objects — so the pages come up empty and look broken when
+  nothing is wrong.
 - Diffs on `index.html` are the entire changelog. Keep changes surgical and the
   commit message explanatory (say *why*, like the overlay fix did).
