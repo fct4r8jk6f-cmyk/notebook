@@ -58,11 +58,16 @@ assigns).
 
 - **kinds**: `task · bill · goal · idea · renewal · debt · health · routine · scrap`
 - **bucket**: `day | week | next-week | someday | goals | ideas`
-- `sample` survives only as a field. **The notebook no longer seeds itself** —
-  `seed()` is gone. A new book opens empty with a line telling you what to do,
-  because pre-filled fake entries read as someone else's notes and had to be
-  cleared before the app was usable. Don't reintroduce them. `clearSamples()`
-  still runs, so any book that already carries seeds sheds them on first dump.
+- **There are no samples.** `seed()`, `clearSamples()`, the `sample` field, the
+  `sampletag` markup and the `meta.seeded` / `meta.firstDumpDone` flags are all
+  gone. A new book opens empty with a line telling you what to do — pre-filled
+  fake entries read as someone else's notes and had to be cleared before the app
+  was usable. Don't reintroduce them.
+  Two purge points remain, and both are deliberate: `migrate()` drops any
+  `sample` item on load, so a notebook written on the old build sheds them the
+  moment it opens rather than waiting for a first dump; and `mergeBooks()` drops
+  them too, so a device still running the old build can't push them back down
+  through the gist.
 - `question` parks an item as a sticky asking the user something; answering it
   runs an `act` (see `answerQuestion` / `actLabel`).
 - `touched` is an ISO instant stamped centrally in `flush()` by diffing each

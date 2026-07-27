@@ -135,8 +135,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 .row-text { font-size: 16px; line-height: 1.4; flex: 1; cursor: pointer; padding: 6px 0 5px; }
 .rows.small .row-text { font-size: 15px; padding: 6px 0 5px; }
 .pencil .row-text, .pencil .bamt, .pencil .bwhen { color: var(--muted); }
-.sample { opacity: 1; }
-.sampletag, .moneytag {
+.moneytag {
   font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
   border: 1px solid var(--border-firm); border-radius: 999px; padding: 1px 7px; margin-left: 6px;
   white-space: nowrap;
@@ -486,7 +485,9 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     v: 1,
     items: [],
     settings: { theme: 'auto', plainHand: false, apiKey: '', model: DEFAULT_MODEL, gistToken: '' },
-    meta: { lastOpen: null, seeded: false, firstDumpDone: false, briefFoldedFor: null, gistId: null, syncedAt: null, graves: {} },
+    /* `seeded` and `firstDumpDone` lived here to gate the watermark samples.
+       Nothing seeds a notebook any more, so nothing reads them. */
+    meta: { lastOpen: null, briefFoldedFor: null, gistId: null, syncedAt: null, graves: {} },
   });
 
   let state = load();
@@ -504,7 +505,11 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   }
 
   function migrate(items) {
-    return items.map((it) => {
+    /* The notebook used to open pre-filled with watermark samples. It doesn't
+       any more, and a book that still carries them sheds them here on load —
+       they used to survive until the first dump, so an untouched notebook was
+       still showing someone else's notes. */
+    return items.filter((it) => !it.sample).map((it) => {
       if (it.kind !== 'person') return it;
       const bd = it.person && it.person.birthday;
       const when = bd ? ` (${bd})` : '';
@@ -574,7 +579,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
     return {
       id: uid(), kind: 'task', text: '', ink: true, date: null, time: null,
       bucket: 'day',           /* day | week | next-week | someday | goals | ideas */
-      done: false, doneAt: null, doneKey: null, carried: 0, sample: false,
+      done: false, doneAt: null, doneKey: null, carried: 0,
       source: null,            /* {quote, at, via} */
       question: null,          /* {q, options:[{label, act}]} — parked sticky */
       bill: null, renewal: null, debt: null, goal: null,
@@ -593,14 +598,6 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
   }
   NB.addItem = addItem; NB.getItem = getItem; NB.removeItem = removeItem;
 
-  /* Clear watermark samples the moment real life arrives. */
-  function clearSamples() {
-    if (state.items.some((i) => i.sample)) {
-      state.items = state.items.filter((i) => !i.sample);
-    }
-    state.meta.firstDumpDone = true; save();
-  }
-  NB.clearSamples = clearSamples;
 
   /* ---------------- undo (6s whisper) ---------------- */
   let undoSnap = null;
@@ -830,8 +827,9 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
       const g = graves[it.id];
       return !g || (it.touched || '') > g;
     });
-    /* a real notebook beats the other device's watermark seeds */
-    if (items.some((i) => !i.sample)) items = items.filter((i) => !i.sample);
+    /* a device still on an older build can push watermark samples up; they
+       never come back down */
+    items = items.filter((i) => !i.sample);
     return { items, graves: pruneGraves(graves) };
   }
   NB.mergeBooks = mergeBooks;
@@ -1421,7 +1419,7 @@ Rules, non-negotiable:
 
   /* ---------------- the Desk (ask the book) ---------------- */
   function notebookDigest() {
-    const compact = state.items.filter((i) => !i.sample).map((i) => {
+    const compact = state.items.map((i) => {
       const o = { kind: i.kind, text: i.text };
       if (i.date) o.date = i.date;
       if (i.time) o.time = i.time;
@@ -1565,21 +1563,19 @@ Rules, non-negotiable:
     opts = opts || {};
     const open = expandedId === it.id;
     const pencil = !it.ink ? 'pencil' : '';
-    const sample = it.sample ? 'sample' : '';
     const carried = it.carried > 0 ? `<span class="carry" title="carried ${it.carried}×">↪</span>` : '';
     const time = it.time ? `<span class="timechip fig">${esc(NB.fmtTime(it.time))}</span>` : '';
     const money = it.bill && it.bill.amount != null ? `<span class="moneytag fig">$${esc(NB.fmtAmt(it.bill.amount))}</span>` : '';
     const glyph = { goal: '★ ', idea: '✎ ', routine: '⟲ ' }[it.kind] || '';
     const tickCls = it.done ? 'checked' : '';
     return `
-    <div class="row ${pencil} ${sample} ${it.done ? 'is-done' : ''}" data-id="${it.id}">
+    <div class="row ${pencil} ${it.done ? 'is-done' : ''}" data-id="${it.id}">
       <div class="row-main">
         ${carried}
         <button class="tick ${tickCls}" data-act="tick" type="button" aria-label="tick">${it.done ? '✓' : ''}</button>
         ${time}
         <span class="row-text hand" data-act="open">${glyph}${esc(it.text)}</span>
         ${money}
-        ${it.sample ? '<span class="sampletag">sample</span>' : ''}
       </div>
       ${it.question ? stickyHTML(it) : ''}
       ${open ? detailHTML(it) : ''}
@@ -1816,7 +1812,7 @@ Rules, non-negotiable:
         <div class="row-main">
           ${du != null && du <= 0 && !b.bill.autopay ? '<span class="flag">⚑</span>' : ''}
           <button class="tick" data-act="paybill" type="button" aria-label="mark paid"></button>
-          <span class="row-text hand" data-act="open">${esc(b.text)}${b.bill.autopay ? '<span class="autotag fig">AUTOPAY</span>' : ''}${b.sample ? '<span class="sampletag">sample</span>' : ''}</span>
+          <span class="row-text hand" data-act="open">${esc(b.text)}${b.bill.autopay ? '<span class="autotag fig">AUTOPAY</span>' : ''}</span>
           <span class="bamt fig ${b.bill.estimated ? 'est' : ''}">${b.bill.amount != null ? (b.bill.estimated ? '~' : '') + '$' + NB.fmtAmt(b.bill.amount) : '$?'}</span>
         </div>
         ${due || cad ? `<div class="bmeta"><span class="bwhen fig">${due ? dueTxt : ''}</span>${cad ? `<span class="bevery fig">${esc(cad)}</span>` : ''}</div>` : ''}
@@ -1964,7 +1960,6 @@ Rules, non-negotiable:
     btns.forEach((b) => (b.disabled = true));
 
     const { items: raw, brain, note } = await NB.extract(text);
-    NB.clearSamples();
 
     if (!raw.length) {
       NB.withUndo('Kept as a scrap — nothing jumped out at me.', () => {
@@ -2161,7 +2156,6 @@ Rules, non-negotiable:
     if (a === 'scrap') {
       const ta = $('#dump-text'); const text = (ta && ta.value.trim()) || '';
       if (text) {
-        NB.clearSamples();
         NB.withUndo('Caught it. It\'ll wait in Ideas.', () => {
           NB.addItem({ kind: 'idea', text: text.length > 60 ? text.slice(0, 57) + '…' : text, ink: false, bucket: 'ideas', source: { quote: text.slice(0, 200), at: new Date().toISOString(), via: 'paste' } });
         });
