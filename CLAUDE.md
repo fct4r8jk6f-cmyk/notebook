@@ -85,12 +85,16 @@ assigns).
 
 `extract(text)` is the entry point. It picks:
 
-The model is chosen in Settings from `MODELS` (Opus 5 default, Sonnet 5,
-Haiku 4.5); `DEFAULT_MODEL` is the head of that list. **These models think by
+The model is chosen in Settings from `MODELS` (Opus 5.5 default, Sonnet 5.5,
+Haiku 5.5); `DEFAULT_MODEL` is the head of that list. **These models think by
 default and `max_tokens` caps thinking *and* the reply together** — that's why
 extraction asks for 8000 and the Desk 2000, not the 2000/300 they used before.
-Cutting those budgets truncates mid-JSON or mid-sentence. `migrateSettings()`
-moves notebooks off the superseded default.
+Cutting those budgets truncates mid-JSON or mid-sentence. **Every listed model
+must accept `output_config.effort`**: Haiku 4.5 didn't, so picking it failed
+every Claude sort and silently fell back to the offline brain.
+`migrateSettings()` maps any stored model in `SUPERSEDED` to its replacement
+(same tier) and sends anything unlisted to the default; it runs on load and on
+import. When the lineup changes, add the outgoing ids to `SUPERSEDED`.
 
 1. **`claudeExtract`** — used only when `settings.apiKey` is set. Calls
    `https://api.anthropic.com/v1/messages` directly from the browser with
