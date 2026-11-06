@@ -604,13 +604,25 @@ label:has(> input[type="checkbox"]) { cursor: pointer; min-height: 32px; }
   /* ---------------- store ---------------- */
   const STORE_KEY = 'notebook-v1';
 
-  /* The librarian's brain. Opus 5 is the default; the others are here for
-     people who'd rather trade a little judgement for speed or cost. */
+  /* The librarian's brain. Opus 5.5 is the default; the others are here for
+     people who'd rather trade a little judgement for speed or cost. Every model
+     listed must accept output_config.effort, which claudeExtract sends: Haiku
+     4.5 rejected it, so picking it failed every Claude sort and quietly fell
+     back to the offline brain. */
   const MODELS = [
-    { id: 'claude-opus-5', label: 'Opus 5 — sharpest', note: 'best at messy dumps' },
-    { id: 'claude-sonnet-5', label: 'Sonnet 5 — quicker', note: 'nearly as good, cheaper' },
-    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — fastest', note: 'plainest, cheapest' },
+    { id: 'claude-opus-5-5', label: 'Opus 5.5 — sharpest', note: 'best at messy dumps' },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 — quicker', note: 'nearly as good, cheaper' },
+    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 — fastest', note: 'plainest, cheapest' },
   ];
+  /* Every model this notebook has offered before, mapped to the one that
+     replaced it. A stored id the picker no longer lists would show the first
+     option as selected while still sending the old model. */
+  const SUPERSEDED = {
+    'claude-opus-4-8': 'claude-opus-5-5',
+    'claude-opus-5': 'claude-opus-5-5',
+    'claude-sonnet-5': 'claude-sonnet-5-5',
+    'claude-haiku-4-5': 'claude-haiku-5-5',
+  };
   const DEFAULT_MODEL = MODELS[0].id;
   NB.MODELS = MODELS;
 
@@ -629,11 +641,13 @@ label:has(> input[type="checkbox"]) { cursor: pointer; min-height: 32px; }
   /* Carry old notebooks forward. The People page is gone; anything filed there
      becomes a loose page in Ideas rather than sitting in storage with nowhere
      to show — the user can read it and toss it. Nothing is deleted on load. */
-  /* The model was never pickable, so anything stored is just the old default —
-     move it forward rather than stranding notebooks on a superseded model. */
+  /* Move a stored model forward to the one that replaced it, keeping the
+     tier the user picked, rather than stranding the notebook on a superseded
+     model. Anything unrecognised goes to the default. */
   function migrateSettings(st) {
     if (!st) return st;
-    if (!st.model || st.model === 'claude-opus-4-8') st.model = DEFAULT_MODEL;
+    if (SUPERSEDED[st.model]) st.model = SUPERSEDED[st.model];
+    if (!MODELS.some((m) => m.id === st.model)) st.model = DEFAULT_MODEL;
     return st;
   }
 
@@ -1809,7 +1823,7 @@ Rules, non-negotiable:
       }
     });
     const base = DEFAULT_STATE();
-    state = { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings || {}), apiKey: state.settings.apiKey, gistToken: state.settings.gistToken } };
+    state = { ...base, ...parsed, settings: migrateSettings({ ...base.settings, ...(parsed.settings || {}), apiKey: state.settings.apiKey, gistToken: state.settings.gistToken }) };
     undoSnap = null;
     save();
   };
